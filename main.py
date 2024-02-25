@@ -5,6 +5,6 @@ register_diff_op('matmul', linear_diff_op)
 register_diff_op('mse', mse_diff_op)
 register_diff_op('sigmoid', sigmoid_diff_op)
 
-from examples.xor import xor_example
+from examples.sine import sine_example
 
-xor_example()
+sine_example()

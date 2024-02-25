@@ -3,7 +3,7 @@ from ops.interpreter import Interpreter
 from ops.functional import *
 from ops.graph import backward
 
-def xor_example():
+def sine_example():
     # Data placeholder
     input = Param(None, var_name='input', shape=(1,1))
     output = Param(None, var_name='output', shape=(1,1))
