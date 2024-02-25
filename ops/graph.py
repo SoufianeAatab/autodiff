@@ -26,11 +26,8 @@ def backward(output, vars):
     for v in reversed(topo):
         if isinstance(v, Param) and v._backward:
             v._backward()
-            if v._op.b is not None:
-                ops.extend([v._op.a, v._op.b])
-            else:
-                ops.append(v._op.a)
-
+            ops.extend([list(v._op.child)])
+     
     gradients_for = []
     for var in vars:
         gradients_for.append(grads[var])

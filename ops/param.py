@@ -1,4 +1,5 @@
 from ops.op import Op
+from ops.ops import Add, Mul, Sub, Transpose, Assign, Reshape, Exp
 
 grads = {}
 global_id = -1
@@ -19,28 +20,39 @@ class Param():
         self._backward = None
 
     def t(self):
-        z = Param(None, children=(self,), shape=(self.shape[1], self.shape[0]), 
-                  var_name=self.var_name + '_t', 
-                  print_init=False)
-        
-        op = Op('transpose', self, b=None)
+        z = Param(None, children=(self,), shape=(self.shape[1], self.shape[0]))
+        op = Transpose(self) # Op('transpose', self, b=None)
         z._op = op
         def backward():
             grads[op.a.id] = grads[z.id]
             # print('t::', self.id, z.id, op)
-            return op.a
+        z._backward = backward
+        return z
+    
+    def exp(self):
+        z = Param(None, children=(self,), shape=(self.shape[0], self.shape[1]))        
+        op = Exp(self)
+        z._op = op
+        def backward():
+            grads[op.a.id] = grads[z.id]
+            # print('t::', self.id, z.id, op)
         z._backward = backward
         return z
 
     def __rmul__(self, other):
         if not isinstance(other, Param):
-            other = Param(other, children=(), shape=self.shape)
-            other._op = Op('assign', other)
-            return self.__mul__(other)
+            out = Param(other, children=(), shape=self.shape)
+            out._op = Assign(other)
+            return self.__mul__(out)
 
     def __mul__(self, other):
+        if not isinstance(other, Param):
+            out = Param(other, children=(), shape=self.shape)
+            out._op = Assign(other)
+            other = out
+
         z = Param(None, children=(self, other), shape=self.shape)
-        op = Op('mul', self, b = other)
+        op = Mul(self, other)
         z._op = op
         def backward():
             aux = grads[op.b.id]
@@ -51,7 +63,8 @@ class Param():
     
     def __add__(self, other):
         z = Param(None, children=(self, other), shape=self.shape)
-        op = Op('add', self, b = other)
+        op = Add(self, other)
+        #Op('add', self, b = other)
         z._op = op
         def backward():
             grads[op.b.id] = grads[z.id]
@@ -61,7 +74,8 @@ class Param():
     
     def __sub__(self, other):
         z = Param(None, children=(self, other), shape=self.shape)
-        op = Op('sub', self, b = other)
+        op = Sub(self, other)
+        #Op('sub', self, b = other)
         z._op = op
         def backward():
             grads[op.b.id] = -grads[z.id]
@@ -71,6 +85,15 @@ class Param():
     
     def __neg__(self):
         return self * -1
+    
+    def reshape(self, shape):
+        z = Param(None, children=(self,), shape=shape)
+        op = Reshape(self, shape) # Op('transpose', self, b=None)
+        z._op = op
+        def backward():
+            grads[op.a.id] = grads[z.id]
+        z._backward = backward
+        return z
 
     def build(self):
         topo = []
@@ -78,9 +101,10 @@ class Param():
         def build_topo(v):
             if v not in visited:
                 visited.add(v)
-                for child in v._prev:
-                    build_topo(child)
-                topo.append(v)
+                if v is not None: 
+                    for child in v._prev:
+                        build_topo(child)
+                    topo.append(v)
         build_topo(self)
         return topo
 
@@ -89,7 +113,7 @@ class Param():
     
     def __repr__(self):
         if self._op is not None:
-            return f"%{self.id}=" + str(self._op) + f' shape={self.shape}'
+            return f"%{self.id}=" + str(self._op.get_inference_code()) + f' shape={self.shape}'
         else:
             return f"%{self.id}::shape={self.shape}"
 

@@ -1,4 +1,5 @@
 from ops.param import Param, Op, grads
+from ops.ops import Matmul, Sigmoid, OnesLike, Mse, SigmoidDiff, Conv2d, Sum, CrossEntropy, LogSoftmax
 
 ops = {}
 def get_diff_op(op_name):
@@ -10,7 +11,7 @@ def register_diff_op(op_name, fnc):
 
 def ones_like(a):
     p = Param(None, children=(a,), shape=a.shape)
-    op = Op('ones_like', a, b=None)
+    op = OnesLike(a) #Op('ones_like', a, b=None)
     p._op = op
     def backward():
         grads[op.a.id] = grads[op.id]
@@ -24,7 +25,8 @@ def matmul(a, b):
     b.other = a
     shape = (a.shape[0], b.shape[1])
     p = Param(None, children=(a, b), shape=shape, )
-    z = Op('matmul', a, b)
+    z = Matmul(a, b)
+    #Op('matmul', a, b)
     p._op = z
     p._backward_op = get_diff_op('matmul')
     def backward():
@@ -42,25 +44,25 @@ def matmul(a, b):
 
 def sigmoid(x):
     p = Param(None, (x,), shape=x.shape, var_name='sigmoid_', print_init=False)
-    z = Op('sigmoid', x, b=None)
+    z = Sigmoid(x)#Op('sigmoid', x, b=None)
     p._op = z
     p._backward_op = get_diff_op('sigmoid')
     def backward():
         grad_out = grads[p.id] # read grad out
-        grads[z.a.id] = p._backward_op((z.a, p), grad_out) # call grad_fn and save the output
+        grads[z.x.id] = p._backward_op((z.x, p), grad_out) # call grad_fn and save the output
     p._backward = backward
     return p
 
 def mse(y, y_pred):
     p = Param(None, shape=y_pred.shape, children=(y, y_pred), var_name='mse_')
-    p._op = Op('mse', y, b=y_pred)
+    p._op = Mse(y, y_pred) #Op('mse', y, b=y_pred)
     p._backward_op = get_diff_op('mse')
     def backward():
         grad_out = grads[p.id]
         op = p._op
-        dldy, dldy_hat = p._backward_op((op.a, op.b), grad_out)
-        grads[op.a.id] = dldy
-        grads[op.b.id] = dldy_hat
+        dldy, dldy_hat = p._backward_op((op.y, op.y_pred), grad_out)
+        grads[op.y.id] = dldy
+        grads[op.y_pred.id] = dldy_hat
     p._backward = backward
     return p
 
@@ -77,6 +79,52 @@ def mse(y, y_pred):
 
 def sigmoid_grad(x, grad):
     dx = Param(None, shape=x.shape, children=(x, grad))
-    op = Op('sigmoid_grad', x, grad)
+    op = SigmoidDiff(x, grad)#Op('sigmoid_grad', x, grad)
     dx._op = op
     return dx
+
+def conv2d(x, kernels, bias, kernel_size = 3, stride = 0, padding=0):
+    # out_size = (math.floor((input_size[0] + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
+    out = Param(None, children=(x, kernels, bias))
+    out._op = Conv2d(x, kernels, bias, kernel_size, stride, padding)
+    out._backward_op = get_diff_op('conv2d')
+    def backward():
+        grad_out = grads[out.id]
+        op = out._op
+        dx, dw, dz = out._backward_op((op.x, op.kernels, op.bias, op.kernel_size, op.stride, op.padding), grad_out)
+        grads[op.x.id] = dx
+        grads[op.kernels.id] = dw
+        grads[op.bias.id] = dz
+    out._backward = backward
+    return out
+
+def sum(x, dim=0):
+    z = Param(None, children=(x,), shape=(x.shape[dim]))
+    op = Sum(x, dim) # Op('transpose', self, b=None)
+    z._op = op
+    def backward():
+        grads[op.a.id] = grads[z.id]
+    z._backward = backward
+    return z
+
+def cross_entropy(input, target):
+    z = Param(None, children=(input, target), shape=(input.shape))
+    op = CrossEntropy(input, target) # Op('transpose', self, b=None)
+    z._op = op
+    z._backward_op = get_diff_op('cross_entropy')
+    def backward():
+        grad_out = grads[z.id]
+        dldy, dldy_hat = z._backward_op((op.input, op.target), grad_out)
+        grads[op.input.id] = dldy_hat
+        grads[op.target.id] = dldy
+    z._backward = backward
+    return z
+
+def log_softmax(x):
+    z = Param(None, children=(x,), shape=(x.shape))
+    op = LogSoftmax(x) # Op('transpose', self, b=None)
+    z._op = op
+    def backward():
+        grads[op.x.id] = grads[z.id]
+    z._backward = backward
+    return z

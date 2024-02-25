@@ -1,5 +1,5 @@
-from ops.functional import matmul, sigmoid_grad
-
+from ops.functional import matmul, sigmoid_grad, conv2d, sum
+from ops.ops import Conv2d, Sum
 
 def linear_diff_op(args, grad):
     w, x = args.b, args.a
@@ -23,16 +23,17 @@ def linear_diff_op(args, grad):
     # print(da._op, da._prev)
     return dw, da
 
+def conv2d_diff_op(args, grad):
+    x, w, b, kernel_size, stride, padding = args
+    C = w.shape[0]
+    dz = grad.reshape((C, -1))
+    dz = sum(dz, dim=0)
+    dw = conv2d(x, grad, None, kernel_size, stride, padding )
+    dx = x # Conv2d(x, grad, None, kernel_size, stride, padding )
+    return dx, dw, dz
+
 def mse_diff_op(args, grad):
     y, y_hat = args
-    # print(f"%{y.grad.id}, %{y_hat.grad.id}=mse_diff(%{y.data.id}, %{y_hat.data.id}) * %{grad.grad.id}")
-    # print(f"%{y.grad.id} = 2 * (%{y.data.id} - %{y_hat.data.id}) * %{grad.grad.id}")
-    # print(f"%{y_hat.grad.id} = -2 * (%{y.data.id} - %{y_hat.data.id}) * %{grad.grad.id}")
-    # y, y_hat, grad = y.data.data, y_hat.data.data, grad.grad.data
-    # dldy = 2 * (y - y_hat) * grad
-    # dldy_hat = -2 * (y - y_hat) * grad
-    # dldy, dldy_hat = mse_grad()
-    # -2(y-yhat)
     yyhat = y - y_hat
     dldy = 2 * yyhat * grad
     dldy_hat = -2 * yyhat * grad
@@ -40,9 +41,22 @@ def mse_diff_op(args, grad):
 
 def sigmoid_diff_op(args, grad):
     z, a = args
-    # print(f"%{z.grad.id}=sigmoid_diff(%{a.data.id}) * %{grad.grad.id}")
-    # print(f"%{z.grad.id} = %{a.data.id} * (1.0 - %{a.data.id}) * %{grad.grad.id}")
-    # z, a, grad = z.data.data, a.data.data, grad.grad.data
-    # dldz = a * (1.0-a) * grad
     dldz = sigmoid_grad(z, grad)
     return dldz
+
+def cross_entropy_diff(args, grad):
+    y, y_hat = args
+    """ Gradient of log_softmax
+    dldz = -grad_nll + (-torch.exp(output) * grad[: y[arg_max]])
+    If we optimize and reduce ops, i.e the negative operators
+    dldz = grad_nll - torch.exp(output)) * grad[: y[arg_max]]  
+
+    NLL = - sum(y[i] * log(p(x[i])))
+        NLL = - sum(y[i] * log(softmax(x[i])))
+        NLL = - sum(y[i] * log_softmax(x[i])); when using log softmax as activation layer
+        NLL = - sum(y[i] * a[i]); a as the activation values of the last layer
+        NLL = -a[y] => when using sparse y_true. y = y_true
+    """
+    dldy = -y + y_hat.exp() * grad
+    dldy_hat = -y + y_hat.exp() * grad
+    return dldy, dldy_hat
