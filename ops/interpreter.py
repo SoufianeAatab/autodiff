@@ -62,23 +62,24 @@ class Interpreter:
                 # op.data = a_tensor - b_tensor
                 print(f"var_{operator.id}=var_{op.a.id} - var_{op.b.id}")
             elif op.op_name == 'ones_like':
-                # op.data = torch.ones_like(a.data)
                 print(f"var_{operator.id}=torch.ones_like(var_{op.a.id})")
             elif op.op_name == 'sigmoid_diff':
-                # op.data = torch.nn.functional.sigmoid(a.data) * (1.0-torch.nn.functional.sigmoid(a.data)) * b.data
                 print(f"var_{operator.id}=torch.nn.functional.sigmoid(var_{op.x.id}) * (1.0-torch.nn.functional.sigmoid(var_{op.x.id})) * var_{op.grad.id}")
             elif op.op_name == 'mse_grad':
-                # op.data = -2*b.data*a.data
-                # print(f"var_{operator.id}=-2*(var_{b.id}-var_{a.id})")
                 pass
             elif op.op_name == 'assign':
                 print(f"var_{operator.id} = torch.tensor({op.a}).expand({operator.shape})")
             elif op.op_name == 'conv2d':
-                print(f"var_{operator.id}=torch.nn.functiona.conv2d(var_{op.x.id}, var_{op.kernels.id}, kernel_size={op.kernel_size})")
+                if op.bias is not None:
+                    print(f"var_{operator.id}=torch.nn.functional.conv2d(var_{op.x.id}, var_{op.kernels.id}, bias=var_{op.bias.id})")
+                else:
+                    print(f"var_{operator.id}=torch.nn.functional.conv2d(var_{op.x.id}, var_{op.kernels.id})")
+            elif op.op_name == 'conv2d_transpose':
+                print(f"var_{operator.id}=torch.nn.functional.conv2d_transpose(var_{op.x.id}, var_{op.kernels.id})")
             elif op.op_name == 'cross_entropy':
-                print(f"var_{operator.id}=torch.nn.functiona.cross_entropy(var_{op.input.id}, var_{op.target.id})")
+                print(f"var_{operator.id}=torch.nn.functional.nll_loss(var_{op.input.id}, var_{op.target.id})")
             elif op.op_name == 'log_softmax':
-                print(f"var_{operator.id}=torch.nn.functiona.log_softmax(var_{op.x.id})")
+                print(f"var_{operator.id}=torch.nn.functional.log_softmax(var_{op.x.id}, dim=1)")
             elif op.op_name == 'exp':
                 print(f"var_{operator.id}=torch.exp(var_{op.a.id})")
             elif op.op_name == 'sum':

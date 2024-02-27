@@ -141,6 +141,24 @@ class Conv2d(Op):
         else:
             return f"conv2d(var_{self.x.id}, var_{self.kernels.id}, None, kernel_size={self.kernel_size}, {self.stride}, {self.padding})"
         
+class Conv2dTranspose(Op):
+    def __init__(self, x, kernels, bias, kernel_size, stride, padding):
+        super().__init__('conv2d_transpose')
+        self.x = x
+        self.kernels = kernels
+        self.bias = bias
+        self.stride = stride
+        self.padding = padding
+        self.kernel_size = kernel_size
+        self.child = (self.x, self.kernels, self.bias)
+
+    def get_inference_code(self):
+        if self.bias is not None:
+            return f"conv2d_transpose(var_{self.x.id}, var_{self.kernels.id}, var_{self.bias.id}, kernel_size={self.kernel_size}, {self.stride}, {self.padding})"
+        else:
+            return f"conv2d_transpose(var_{self.x.id}, var_{self.kernels.id}, None, kernel_size={self.kernel_size}, {self.stride}, {self.padding})"
+        
+
 class CrossEntropy(Op):
     def __init__(self, input, target):
         super().__init__("cross_entropy")

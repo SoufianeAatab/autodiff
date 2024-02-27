@@ -87,11 +87,12 @@ class Param():
         return self * -1
     
     def reshape(self, shape):
+        assert isinstance(shape, tuple), "Expering shape to be a tuple not a int"
         z = Param(None, children=(self,), shape=shape)
         op = Reshape(self, shape) # Op('transpose', self, b=None)
         z._op = op
         def backward():
-            grads[op.a.id] = grads[z.id]
+            grads[op.a.id] = grads[z.id].reshape(self.shape)
         z._backward = backward
         return z
 
