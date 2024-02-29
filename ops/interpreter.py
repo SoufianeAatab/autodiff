@@ -83,8 +83,19 @@ class Interpreter:
             elif op.op_name == 'exp':
                 print(f"var_{operator.id}=torch.exp(var_{op.a.id})")
             elif op.op_name == 'sum':
-                print(f"var_{operator.id}=torch.sum(var_{op.x.id}, dim={op.dim})")
+                print(f"var_{operator.id}=torch.sum(var_{op.x.id}, dim={op.dim}) # {op.x.shape}")
             elif op.op_name == 'reshape':
                 print(f"var_{operator.id}=var_{op.a.id}.reshape({op.shape})")
             else:
                 print(f"Op {op.op_name} not defined!")
+
+    def gen_code(self):
+        supported_ops = ['matmul', 'conv2d', 'sum', 'reshape', 'transpose', 'mul', 'add', 'sub', 'exp', 'assign', 'ones_like', 'sigmoid', 'log_softmax', 'sigmoid_diff', 'nll_loss']
+        for out in self.ops:
+            if not out._op:
+                continue
+            op = out._op
+            if op.op_name in supported_ops:
+                print(op.get_inference_code(out))
+            else:
+                print('Missing:', op.op_name)
