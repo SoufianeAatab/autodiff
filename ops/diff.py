@@ -1,4 +1,4 @@
-from ops.functional import matmul, sigmoid_grad, conv2d, sum, conv2d_transpose
+from ops.functional import matmul, sigmoid_grad, conv2d, sum, conv2d_transpose, settings, ConvOrder
 
 def linear_diff_op(args, grad):
     w, x = args.b, args.a
@@ -10,16 +10,28 @@ def linear_diff_op(args, grad):
 
 def conv2d_diff_op(args, grad):
     x, w, b, kernel_size, stride, padding = args
-    C = w.shape[0]
-    # todo fix: bias
-    dz = grad.reshape((C, -1))
+    assert 'CONV_ORDER' in settings, "Please set convolution order"
+    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+        W, H, I_C = x.shape[-2], x.shape[-1], x.shape[0]
+        GRAD_W, GRAD_H = grad.shape[1], grad.shape[2]
+    else:
+        # OWHC
+        W, H, I_C = x.shape[-3], x.shape[-2], x.shape[-1]
+        GRAD_W, GRAD_H = grad.shape[0], grad.shape[1]
+
+    O_C = w.shape[0]
+
+    # compute conv2d output dimmensions, to avoid using -1 for shape inference. 
+    import math
+    w_out = (math.floor((H + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
+    h_out = (math.floor((W + 2 * padding[1] - kernel_size[1]) / stride[1]) + 1)
+
+    dz = grad.reshape((O_C, w_out*h_out))
     dz = sum(dz, dim=1)
-    x_r = x.reshape((x.shape[0],1, x.shape[1], x.shape[2])) 
-    grad_r = grad.reshape((C, 1, grad.shape[1], grad.shape[2]))
+    x_r = x.reshape((I_C, 1, H, W)) 
+    grad_r = grad.reshape((O_C, 1, GRAD_W, GRAD_H))
     dw = conv2d(x_r, grad_r, None, kernel_size, stride, padding )
-    # TODO: remember to permute dim 0 with 1
     dx = conv2d_transpose(grad, w, None, kernel_size, stride, padding ) 
-    # Conv2d(x, grad, None, kernel_size, stride, padding )
     return dx, dw, dz
 
 def mse_diff_op(args, grad):
