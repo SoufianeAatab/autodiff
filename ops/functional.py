@@ -1,6 +1,13 @@
 from ops.param import Param, Op, grads
-from ops.ops import Conv2dTranspose, Matmul, Sigmoid, OnesLike, Mse, SigmoidDiff, Conv2d, Sum, CrossEntropy, LogSoftmax
+from ops.ops import Conv2dTranspose, Matmul, Sigmoid, OnesLike, Mse, SigmoidDiff, Conv2d, Sum, NLLLoss, LogSoftmax
+from enum import Enum
 import math
+
+class ConvOrder(Enum):
+    OHWC = 1
+    OCWH = 2
+
+settings = {}
 
 ops = {}
 def get_diff_op(op_name):
@@ -67,27 +74,22 @@ def mse(y, y_pred):
     p._backward = backward
     return p
 
-# def mse_grad(y, y_pred, grad):
-#     dldy = Param(None, shape=y_pred.shape, children=(y, y_pred))
-#     dldy_hat = Param(None, shape=y_pred.shape, children=(y, y_pred))
-#     op = Op('mse_grad', y, y_pred)
-#     dldy._op = op
-#     dldy_hat._op = op
-
-#     dldy = 2 * dldy * grad
-#     dldy_hat = -2 * dldy_hat * grad
-#     return dldy, dldy_hat
-
 def sigmoid_grad(x, grad):
     dx = Param(None, shape=x.shape, children=(x, grad))
     op = SigmoidDiff(x, grad)#Op('sigmoid_grad', x, grad)
     dx._op = op
     return dx
 
-def conv2d(x, kernels, bias, kernel_size = 3, stride = 1, padding=0):
-    H, W = x.shape[-2], x.shape[-1]
-    w_out = (math.floor((H + 2 * padding - kernel_size) / stride) + 1)
-    h_out = (math.floor((W + 2 * padding - kernel_size) / stride) + 1)
+def conv2d(x, kernels, bias, kernel_size = (3, 3), stride = (1,1), padding=(0,0)):
+    assert 'CONV_ORDER' in settings, "Please set convolution order"
+    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+        W, H = x.shape[-2], x.shape[-1]
+    else:
+        # OWHC
+        W, H = x.shape[-3], x.shape[-2]
+
+    w_out = (math.floor((H + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
+    h_out = (math.floor((W + 2 * padding[1] - kernel_size[1]) / stride[1]) + 1)
     out = Param(None, children=(x, kernels, bias), shape=(kernels.shape[0], h_out, w_out))
     out._op = Conv2d(x, kernels, bias, kernel_size, stride, padding)
     out._backward_op = get_diff_op('conv2d')
@@ -101,10 +103,15 @@ def conv2d(x, kernels, bias, kernel_size = 3, stride = 1, padding=0):
     out._backward = backward
     return out
 
-def conv2d_transpose(x, kernels, bias, kernel_size = 3, stride = 1, padding=0):
-    H, W = x.shape[-2], x.shape[-1]
-    w_out = ((H - 1) * stride - 2 * padding + kernel_size)
-    h_out = ((W - 1) * stride - 2 * padding + kernel_size)
+def conv2d_transpose(x, kernels, bias, kernel_size = (3,3), stride = (1,1), padding=(0,0)):
+    assert 'CONV_ORDER' in settings, "Please set convolution order"
+    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+        W, H = x.shape[-2], x.shape[-1]
+    else:
+        # OWHC
+        W, H = x.shape[-3], x.shape[-2]
+    w_out = ((H - 1) * stride[0] - 2 * padding[0] + kernel_size[0])
+    h_out = ((W - 1) * stride[1] - 2 * padding[1] + kernel_size[1])
     out = Param(None, children=(x, kernels, bias), shape=(kernels.shape[0], h_out, w_out))
     out._op = Conv2dTranspose(x, kernels, bias, kernel_size, stride, padding)
     return out
@@ -120,7 +127,7 @@ def sum(x, dim=0):
 
 def nll_loss(input, target):
     z = Param(None, children=(input, target), shape=(input.shape))
-    op = CrossEntropy(input, target) # Op('transpose', self, b=None)
+    op = NLLLoss(input, target) # Op('transpose', self, b=None)
     z._op = op
     z._backward_op = get_diff_op('nll_loss')
     def backward():
