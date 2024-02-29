@@ -46,6 +46,7 @@ typedef enum {
     ARM_CMSIS_NN_ARG_ERROR = -1
 } arm_cmsis_nn_status;
 
+/* TODO: Conver this to matmul. Right now is mat vec multiplication*/
 float* mat_mul(float* a_data, float* b_data, float* c_data, 
 uint32_t a_rows, uint32_t a_cols, uint32_t a_stride1, uint32_t a_stride2, 
 uint32_t b_rows, uint32_t b_cols, uint32_t b_stride1, uint32_t b_stride2) {
@@ -109,6 +110,51 @@ uint32_t b_rows, uint32_t b_cols, uint32_t b_stride1, uint32_t b_stride2) {
     return c;
 }
 
+float* sum(float* data, float* out, uint8_t dim, uint32_t rows, uint32_t cols) {
+    if ( dim == 1){
+        for (uint32_t i = 0; i < rows; ++i){
+            float sum = 0;
+            for (uint32_t j = 0; j < cols; ++j) {
+                sum += data[i * cols + j];
+            }
+            out[i] = sum;
+        }
+    } else if (dim == 0) {
+        for (uint32_t i = 0; i < cols; ++i){
+            float sum = 0;
+            for (uint32_t j = 0; j < rows; ++j) {
+                sum += data[j * cols + i];
+            }
+            out[i] = sum;
+        }
+    }
+
+    return out;
+}
+
+float* mul(float* a, float *b, float* c, uint32_t size) {
+    for(uint32_t i=0;i<size;++i){
+        c[i] = a[i] * b[i];
+    }
+
+    return c;
+}
+
+float* add(float* a, float *b, float* c, uint32_t size) {
+    for(uint32_t i=0;i<size;++i){
+        c[i] = a[i] + b[i];
+    }
+
+    return c;
+}
+
+float* exp(float* a, float *b, uint32_t size) {
+    for(uint32_t i=0;i<size;++i){
+        b[i] = expf(a[i]);
+    }
+
+    return b;
+}
 
 #if __arm__
 __STATIC_FORCEINLINE 
@@ -141,13 +187,13 @@ src, uint32_t block_size)
 #endif
 }
 
-arm_cmsis_nn_status arm_convolve_NHWC( cmsis_nn_context *ctx,
-                                           conv_params_t *conv_params,
-                                           conv_dims *input_dims,
+arm_cmsis_nn_status arm_convolve_NHWC( float* ctx_buf,
+                                           uint32_t pad_x, uint32_t pad_y, uint32_t stride_x, uint32_t stride_y,
+                                           uint32_t out_activation_min, uint32_t out_activation_max,
+                                           uint32_t input_batches, uint32_t input_x, uint32_t input_y, uint32_t input_ch, uint32_t kernel_x, uint32_t kernel_y, uint32_t rhs_cols,
                                            float *input_data,
-                                           conv_dims *filter_dims,
                                            float *filter_data,
-                                           conv_dims *output_dims,
+                                           uint32_t output_x, uint32_t output_y, uint32_t output_ch,
                                           float *output_data)
 {
     //(void)bias_dims;
@@ -160,27 +206,7 @@ arm_cmsis_nn_status arm_convolve_NHWC( cmsis_nn_context *ctx,
     // {
     //     return ARM_CMSIS_NN_ARG_ERROR;
     // }
-    float *buffer_a = (float *)ctx->buf;
-
-    const int32_t input_batches = input_dims->n;
-    const int32_t input_x = input_dims->w;
-    const int32_t input_y = input_dims->h;
-    const int32_t input_ch = input_dims->c;
-    const int32_t kernel_x = filter_dims->w;
-    const int32_t kernel_y = filter_dims->h;
-    const int32_t output_x = output_dims->w;
-    const int32_t output_y = output_dims->h;
-    const int32_t output_ch = output_dims->c;
-    const int32_t rhs_cols = input_ch * kernel_y * kernel_x;
-
-    const int32_t pad_x = conv_params->padding.w;
-    const int32_t pad_y = conv_params->padding.h;
-    const int32_t stride_x = conv_params->stride.w;
-    const int32_t stride_y = conv_params->stride.h;
-
-    const int16_t out_activation_min = conv_params->activation.min;
-    const int16_t out_activation_max = conv_params->activation.max;
-
+    float *buffer_a = ctx_buf;
     for (int i_batch = 0; i_batch < input_batches; i_batch++)
     {
         /* Generate two columns from the input tensor a GEMM computation */
@@ -287,7 +313,6 @@ arm_cmsis_nn_status arm_convolve_NHWC( cmsis_nn_context *ctx,
 }
 
 int main() {
-
     cmsis_nn_context ctx = {};
     ctx.buf = malloc(1024*32);
     float filter_data[] = {0.4963, 0.6323, 0.1610, 0.7682, 0.3489, 0.2823, 0.0885, 0.4017, 0.6816,
@@ -365,13 +390,13 @@ int main() {
     float* output_data = (float*)malloc(5*7*7*sizeof(float));
 
     arm_convolve_NHWC(&ctx,
-                                &conv_params,
-                                &input_dims,
-                                input_data,
-                                &filter_dims,
-                                filter_data,
-                                &output_dims,
-                                output_data);
+                        &conv_params,
+                        &input_dims,
+                        input_data,
+                        &filter_dims,
+                        filter_data,
+                        &output_dims,
+                        output_data);
 
     for(int i=0;i<5*7*7;++i){
         printf("%f, ", output_data[i]);
