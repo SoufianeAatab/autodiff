@@ -19,8 +19,20 @@ class Param():
         self._backward_op = None
         self._backward = None
 
+        strides = []
+        list_shape = list(shape)
+        for s in reversed(range(len(list_shape))):
+            l = 1
+            for i in range(1,s+1):
+                l *= list_shape[i]
+            strides.append(l)
+
+        #print(strides)
+        self.stride = tuple(strides)
+
     def t(self):
         z = Param(None, children=(self,), shape=(self.shape[1], self.shape[0]))
+        z.stride = (self.stride[1], self.stride[0])
         op = Transpose(self) # Op('transpose', self, b=None)
         z._op = op
         def backward():
@@ -84,7 +96,8 @@ class Param():
         return z
     
     def __neg__(self):
-        return self * -1
+        from ops.functional import const
+        return self * const(-1, self.shape)
     
     def reshape(self, shape):
         assert isinstance(shape, tuple), "Expering shape to be a tuple not a int"
@@ -114,7 +127,7 @@ class Param():
     
     def __repr__(self):
         if self._op is not None:
-            return f"%{self.id}=" + str(self._op.get_inference_code()) + f' shape={self.shape}'
+            return f"%{self.id}=" + str(self._op.op_name) + f' shape={self.shape} value=' + (str(self.data)) if self.data is not None else f"%{self.id}=" + str(self._op.op_name) + f' shape={self.shape}'
         else:
             return f"%{self.id}::shape={self.shape}"
 
