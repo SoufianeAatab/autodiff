@@ -54,11 +54,11 @@ interpreter.gen_sgd(grads, param_grads)
 run 
 ```python main.py``` thiss command will generate and output the following code in c containg the forward + backward + sgd, ready to be used.
 ```c
+float* buf = (float*)calloc(51828, sizeof(float));
 mat_mul(&input_ptr[l * 784] /* (1, 784) */, &buf[0] /* (784, 32) */, &buf[26202] /* (1, 32) */, 1, 784, 784, 1, 784, 32, 1, 784); // (1, 32) 5
 sigmoid(&buf[26202] /* (1, 32)*/ , &buf[26234] /*(1, 32)*/, 32); // (1, 32) 6
 mat_mul(&buf[26234] /* (1, 32) */, &buf[25088] /* (32, 10) */, &buf[26266] /* (1, 10) */, 1, 32, 32, 1, 32, 10, 1, 32); // (1, 10) 8
 log_softmax(&buf[26266], &buf[26276], 10); // (1, 10) 9
-if (accuracy(&buf[26276], &y_ptr[l*10], 10)) correct += 1;
 exp(&buf[26276], &buf[26286], 10); // (1, 10) 18
 buf[26296] = nll_loss(&buf[26276], &y_ptr[l*10], 10); // (1, 10) 10
 for(uint32_t k=0;k<10;++k){
