@@ -3,7 +3,7 @@ from ops.interpreter import Interpreter
 from ops.functional import *
 from ops.graph import backward
 
-def sine_example():
+def mnist_example():
     # Data placeholder
     input = Param(None, var_name='input', shape=(1,28*28))
     output = Param(None, var_name='output', shape=(1,10))
