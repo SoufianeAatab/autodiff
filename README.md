@@ -1,5 +1,5 @@
 # Autodiff: Automatic Differentiation for Training Neural Networks on IoT Devices
-During my thesis on "Training Neural Networks on IoT Devices," I faced challenges building neural network models in plain C and deploying them for on-device training. This involved creating operators and making sure they could calculate both forward and backward passes, handling inputs, and gradients from the loss function. It was tricky, and everything needed to fit just right. Since then, I've wanted to make a tool to automate this process. Recently, I found Andrej Karpathy's micrograd project on GitHub, which inspired me to start. After two weeks of work, I've managed to make it.
+During my thesis on "Training Neural Networks on IoT Devices," I faced challenges building neural network models in plain C and deploying them for on-device training. This involved creating operators and making sure they could calculate both forward and backward passes, handling inputs, and gradients from the loss function. It was tricky, and everything needed to fit just right. Since then, I've wanted to make a tool to automate this process. Recently, I found Andrej Karpathy's micrograd project on GitHub, which inspired me to start. 
 
 Implemented layers so far:
 -----------------------
