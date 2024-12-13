@@ -1,4 +1,4 @@
-from ops.param import Param, Op, grads
+from ops.param import Param, grads
 from ops.ops import Conv2dTranspose, Matmul, Sigmoid, OnesLike, Mse, SigmoidDiff, Conv2d, Sum, NLLLoss, LogSoftmax, Const, MaxPool2d, MaxPool2dGrad
 from enum import Enum
 import math
