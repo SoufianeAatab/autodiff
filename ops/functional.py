@@ -61,6 +61,20 @@ def sigmoid(x):
     p._backward = backward
     return p
 
+def binary_cross_entropy(input, target):
+    p = Param(None, children=(input,target), shape=input.shape, )
+    z = BinaryCrossEntropy(input, target)
+    p._op = z
+    p._backward_op = get_diff_op('binary_cross_entropy')
+    def backward():
+        grad_out = grads[p.id] # read grad out
+        dldy_hat, dldy = p._backward_op((z.input, z.target), grad_out) # call grad_fn and save the output
+        grads[z.input.id] = dldy_hat
+        grads[z.target.id] = dldy
+        # grads[z.target.id] = dldy # call grad_fn and save the output
+    p._backward = backward
+    return p
+
 def mse(y, y_pred):
     p = Param(None, shape=y_pred.shape, children=(y, y_pred), var_name='mse_')
     p._op = Mse(y, y_pred) #Op('mse', y, b=y_pred)
@@ -80,27 +94,33 @@ def sigmoid_grad(x, grad):
     dx._op = op
     return dx
 
+def binary_cross_entropy_grad(input, target, grad):
+    dx = Param(None, shape=input.shape, children=(input, target, grad))
+    op = BinaryCrossEntropyDiff(input, target, grad)#Op('sigmoid_grad', x, grad)
+    dx._op = op
+    return dx
+
 def conv2d(x, kernels, bias, stride = (1,1), padding=(0,0)):
     assert 'CONV_ORDER' in settings, "Please set convolution order"
 
     shape = list(x.shape)
     if len(shape) == 3:
-        shape = [1] + shape # append batch
+        shape = [1] + shape # append batch size [n,h,w,c]
         
     x.shape = shape
     if settings['CONV_ORDER'] == ConvOrder.OCWH:
         B, H, W, C = shape[-4], shape[-1], shape[-2], shape[-3]
         kernel_size = kernels.shape[2], kernels.shape[3]
-    else:
+    elif settings['CONV_ORDER'] == ConvOrder.OHWC:
         # OWHC
-        B, H, W, C = shape[-4], shape[-3], shape[-2], shape[-1]
+        B, H, W, C = shape[0], shape[-3], shape[-2], shape[-1]
         kernel_size = kernels.shape[1], kernels.shape[2]
 
-    w_out = (math.floor((H + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
-    h_out = (math.floor((W + 2 * padding[1] - kernel_size[1]) / stride[1]) + 1)
+    w_out = (math.floor((W + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
+    h_out = (math.floor((H + 2 * padding[1] - kernel_size[1]) / stride[1]) + 1)
     if settings['CONV_ORDER'] == ConvOrder.OCWH:
         out = Param(None, children=(x, kernels, bias), shape=(B, kernels.shape[0], h_out, w_out))
-    else:
+    elif settings['CONV_ORDER'] == ConvOrder.OHWC:
         out = Param(None, children=(x, kernels, bias), shape=(B, h_out, w_out, kernels.shape[0]))
 
     if bias is None:
@@ -140,16 +160,17 @@ def max_pool2d(x, kernel_size = (2,2), stride = (1,1), padding=(0,0)):
         
     x.shape = shape
     if settings['CONV_ORDER'] == ConvOrder.OCWH:
-        B, H, W, C = shape[-4], shape[-1], shape[-2], shape[-3]
+        B, H, W, C = shape[0], shape[-1], shape[-2], shape[-3]
     else:
         # OWHC
-        B, H, W, C = shape[-4], shape[-3], shape[-2], shape[-1]
+        B, H, W, C = shape[0], shape[-3], shape[-2], shape[-1]
 
-    w_out = (math.floor((H + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
-    h_out = (math.floor((W + 2 * padding[1] - kernel_size[1]) / stride[1]) + 1)
+    h_out = (math.floor((H + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
+    w_out = (math.floor((W + 2 * padding[1] - kernel_size[1]) / stride[1]) + 1)
+    print(w_out, h_out)
     if settings['CONV_ORDER'] == ConvOrder.OCWH:
         out = Param(None, children=(x, ), shape=(B, x.shape[1], h_out, w_out))
-    else:
+    elif settings['CONV_ORDER'] == ConvOrder.OHWC:
         out = Param(None, children=(x, ), shape=(B, h_out, w_out, x.shape[-1]))
 
     out._op = MaxPool2d(x, kernel_size, stride, padding)

@@ -1,4 +1,4 @@
-from ops.functional import matmul, sigmoid_grad, conv2d, sum, conv2d_transpose, settings, ConvOrder, const, max_pool2d_diff
+from ops.functional import matmul, sigmoid_grad, conv2d, sum, conv2d_transpose, settings, ConvOrder, const, max_pool2d_diff, binary_cross_entropy_grad
 
 def linear_diff_op(args, grad):
     w, x = args.b, args.a
@@ -56,6 +56,12 @@ def sigmoid_diff_op(args, grad):
     z, a = args
     dldz = sigmoid_grad(z, grad)
     return dldz
+
+def binary_cross_entropy_diff_op(args, grad):
+    input, target = args
+    dldy_hat = binary_cross_entropy_grad(input, target, grad)
+    dldy = const(1, target.shape)
+    return dldy_hat, dldy
 
 
 def nll_loss(args, grad):

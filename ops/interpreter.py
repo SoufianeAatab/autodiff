@@ -109,7 +109,7 @@ class Interpreter:
         return size
     
     def gen_code(self):
-        supported_ops = ['matmul', 'conv2d', 'sum', 'reshape', 'transpose', 'mul', 'add', 'sub', 'exp', 'assign', 'ones_like', 'sigmoid', 'log_softmax', 'sigmoid_diff', 'nll_loss', 'mse', 'const', 'assign', 'max_pool2d', 'max_pool2d_grad']
+        supported_ops = ['matmul', 'conv2d', 'sum', 'reshape', 'transpose', 'mul', 'add', 'sub', 'exp', 'assign', 'ones_like', 'sigmoid', 'log_softmax', 'sigmoid_diff', 'nll_loss', 'mse', 'const', 'assign', 'max_pool2d', 'max_pool2d_grad', 'binary_cross_entropy', 'binary_cross_entropy_diff']
         mem_buffer_size = self.total_mem
         for out in self.ops:
             if not out._op:
@@ -168,6 +168,7 @@ class Interpreter:
             size = 1
             for d in grad.shape:
                 size *= d
+            print(f"// sgd for {grad.id}")
             print("for (uint32_t k=0;k<"+str(size)+";++k){")
             print(f"\tbuf[{self.mem[g]} + k] -= buf[{ptr} + k] * lr;")
             print("}")
