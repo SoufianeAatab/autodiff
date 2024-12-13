@@ -22,10 +22,12 @@ def backward(output, vars):
             topo.append(v)
 
     build_topo(output)
+
     ops = []
     for v in reversed(topo):
         if isinstance(v, Param) and v._backward:
             v._backward()
+            # store the new ops generated from computing the backward pass.
             ops.extend([list(v._op.child)])
      
     gradients_for = []

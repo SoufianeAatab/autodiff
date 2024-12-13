@@ -32,14 +32,14 @@ typedef struct
     int32_t size; /**< Buffer size */
 } cmsis_nn_context;
 
-typedef struct conv_params_t {
+typedef struct {
     int32_t input_offset;  /**< The negative of the zero value for the input tensor */
     int32_t output_offset; /**< The negative of the zero value for the output tensor */
     tile stride;
     tile padding;
     tile dilation;
     cmsis_nn_activation activation;
-};
+} conv_params_t;
 
 typedef struct
 {
@@ -63,16 +63,16 @@ float* sigmoid(float* x, float* a, uint32_t size) {
 }
 
 void sigmoid_diff(float* x, float* grad, float* out, uint32_t size) {
-    while(size){
-        *out = 1.0f / (1.0f + exp(-*x));
-        --size;
-        ++out;
-        ++x;
-    }
-    // for (uint32_t i = 0; i < size; ++i) {
-    //     float a = 1.0f / (1.0f + exp(-x[i]));
-    //     out[i] = (a * (1.0-a)) * grad[i];
+    // while(size){
+    //     *out = 1.0f / (1.0f + exp(-*x));
+    //     --size;
+    //     ++out;
+    //     ++x;
     // }
+    for (uint32_t i = 0; i < size; ++i) {
+        float a = 1.0f / (1.0f + exp(-x[i]));
+        out[i] = (a * (1.0-a)) * grad[i];
+    }
     // return out;
 }
 
@@ -83,6 +83,15 @@ float nll_loss(float* y_pred, float* y, uint32_t size){
     }
     float loss = -y_pred[imax];
     return loss;
+}
+
+float binary_cross_entropy(float* y_hat, float*y){
+    float loss = y[0] * log(y_hat[0]) + (1 - y[0]) * log(1 - y_hat[0]);
+    return -loss;
+}
+
+float binary_cross_entropy_diff(float* y_hat, float*y, float* out_grad){
+    out_grad[0] = (y_hat[0] - y[0]) / (y_hat[0] * (1 - y_hat[0]));    
 }
 
 float mse(float* y_pred, float* y, uint32_t size){
@@ -557,7 +566,7 @@ void max_pool_backward(const float *grad_output, const float *input, float *grad
                        size_t output_x, size_t output_y, size_t kernel_x, size_t kernel_y,
                        size_t stride_x, size_t stride_y, size_t pad_x, size_t pad_y) {
         for (size_t c = 0; c < channel_in; c++) {
-        for (size_t b = 0; b < 1; b++) {
+        for (size_t b = 0; b < 1; b++) { // Batch
             for (size_t i_y = 0; i_y < output_y; i_y++) {
                 for (size_t i_x = 0; i_x < output_x; i_x++) {
                     // Find indices of the corresponding pooling window in the input

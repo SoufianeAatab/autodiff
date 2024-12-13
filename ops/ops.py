@@ -212,10 +212,11 @@ class Conv2d(Op):
             input_x = self.x.shape[2]
             input_y = self.x.shape[3]
             input_ch = self.x.shape[1]
-        else:
-            input_x = self.x.shape[1]
-            input_y = self.x.shape[2]
+        elif settings['CONV_ORDER'] == ConvOrder.OHWC:
+            input_y = self.x.shape[1]
+            input_x = self.x.shape[2]
             input_ch = self.x.shape[3]  
+
         kernel_x = self.kernel_size[0]
         kernel_y = self.kernel_size[1]
         rhs_cols = input_ch * kernel_x * kernel_y
@@ -255,8 +256,8 @@ class MaxPool2d(Op):
             input_y = self.x.shape[3]
             channel_in = self.x.shape[1]
         else:
-            input_x = self.x.shape[1]
-            input_y = self.x.shape[2]
+            input_y = self.x.shape[1]
+            input_x = self.x.shape[2]
             channel_in = self.x.shape[3]
 
         kernel_x = self.kernel_size[0]
@@ -293,8 +294,8 @@ class MaxPool2dGrad(Op):
             output_x = self.x.shape[2]
             output_y = self.x.shape[3]
         else:
-            input_x = self.grad.shape[1]
-            input_y = self.grad.shape[2]
+            input_x = self.grad.shape[2]
+            input_y = self.grad.shape[1]
             channel_in = self.grad.shape[3]
             output_x = self.x.shape[1]
             output_y = self.x.shape[2]
@@ -351,6 +352,31 @@ class LogSoftmax(Op):
         for dim in dims:
             size *= dim
         return f"log_softmax(&buf[{child_vars[0]}], &buf[{child_vars[-1]}], {size});"
+    
+class BinaryCrossEntropy(Op):
+    def __init__(self, input, target):
+        super().__init__("binary_cross_entropy")
+        self.input = input
+        self.target = target
+        self.child = (self.input, self.target)
+    
+    def get_inference_code(self, operator, child_vars):
+        return f"binary_cross_entropy(&buf[{child_vars[0]}], &buf[{child_vars[1]}]);"
+    
+class BinaryCrossEntropyDiff(Op):
+    def __init__(self, input, target, grad):
+        super().__init__("binary_cross_entropy_diff")
+        self.input = input
+        self.target = target
+        self.grad = grad
+        self.child = (self.input, self.target, self.grad)
+    
+    def get_inference_code(self, operator, child_vars):
+        a_var = child_vars[0]
+        b_var = child_vars[1]
+        out_var = child_vars[-1]
+
+        return f"binary_cross_entropy_diff(&buf[{a_var}], &buf[{b_var}], &buf[{out_var}]);"
 
 class Const(Op):
     def __init__(self, x):
