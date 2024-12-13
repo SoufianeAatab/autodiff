@@ -1,5 +1,3 @@
-import torch
-
 class Interpreter:
     def __init__(self, ops, params):
         self.ops = ops

@@ -1,4 +1,3 @@
-from ops.op import Op
 from ops.ops import Add, Mul, Sub, Transpose, Assign, Reshape, Exp
 
 grads = {}
