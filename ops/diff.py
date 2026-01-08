@@ -15,7 +15,7 @@ def conv2d_diff_op(args, grad):
     if len(shape) == 3:
         shape = [1] + shape # append batch
     O_C = w.shape[0]
-    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+    if settings['CONV_ORDER'] == ConvOrder.OCHW:
         W, H, I_C = shape[-2], shape[-1], shape[-3]
         GRAD_W, GRAD_H = grad.shape[2], grad.shape[3]
         x_r = x.reshape((I_C, 1, H, W)) 

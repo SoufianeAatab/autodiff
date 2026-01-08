@@ -15,3 +15,4 @@ from examples.conv import conv_example
 from examples.fc_mnist import mnist_example
 
 mnist_example()
+

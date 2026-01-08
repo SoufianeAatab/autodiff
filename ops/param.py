@@ -4,7 +4,7 @@ grads = {}
 global_id = -1
 
 class Param():
-    def __init__(self, x, children = (), shape = (1,1), var_name="", print_init = False):  
+    def __init__(self, x, children = (), shape = (1,1), require_grads=True, var_name="", print_init = False):  
         global global_id
         global_id += 1
         self.data = x
@@ -12,6 +12,7 @@ class Param():
         self.other = None
         self.var_name = var_name
         self.shape = shape
+        self.require_grads = require_grads
 
         self._prev = set(children)
         self._op = None
@@ -26,17 +27,24 @@ class Param():
                 l *= list_shape[i]
             strides.append(l)
 
-        #print(strides)
+        print(f"Strides for {var_name} are {strides}")
         self.stride = tuple(strides)
-
+    
+    # For transpose we just switch the strides and shape
     def t(self):
+        """
+        Transposes the current parameter (matrix) by swapping its shape and strides.
+        Returns a new Param object representing the transposed matrix.
+        """
+        # Create a new Param object with swapped shape (rows <-> columns)
         z = Param(None, children=(self,), shape=(self.shape[1], self.shape[0]))
         z.stride = (self.stride[1], self.stride[0])
+        # Create a Transpose operation to track this operation in the computation graph
         op = Transpose(self) # Op('transpose', self, b=None)
         z._op = op
         def backward():
+            # The gradient of the input is the gradient of the output (transpose is its own inverse)
             grads[op.a.id] = grads[z.id]
-            # print('t::', self.id, z.id, op)
         z._backward = backward
         return z
     
@@ -44,31 +52,38 @@ class Param():
         z = Param(None, children=(self,), shape=(self.shape[0], self.shape[1]))        
         op = Exp(self)
         z._op = op
+        # TODO: Is this backward function correct?
         def backward():
             grads[op.a.id] = grads[z.id]
-            # print('t::', self.id, z.id, op)
         z._backward = backward
         return z
 
-    def __rmul__(self, other):
-        if not isinstance(other, Param):
-            out = Param(other, children=(), shape=self.shape)
-            out._op = Assign(other)
-            return self.__mul__(out)
+    # def __rmul__(self, other):
+    #     if not isinstance(other, Param):
+    #         out = Param(other, children=(), shape=self.shape)
+    #         out._op = Assign(other)
+    #         return self.__mul__(out)
 
     def __mul__(self, other):
         if not isinstance(other, Param):
             out = Param(other, children=(), shape=self.shape)
             out._op = Assign(other)
             other = out
+        assert self.shape == other.shape, "Mismatch shape in * operator"
 
         z = Param(None, children=(self, other), shape=self.shape)
         op = Mul(self, other)
         z._op = op
+        # z = a * b
+        # da/dz = b * grad
+        # db/dz = a * grad
         def backward():
-            aux = grads[op.b.id]
-            grads[op.b.id] = grads[op.a.id]
-            grads[op.a.id] = aux
+            grad_z = grads[z.id]
+            grads[op.a.id] = other * op.b
+            grads[op.b.id] = self * op.a
+            # aux = grads[op.b.id]
+            # grads[op.b.id] = grads[op.a.id]
+            # grads[op.a.id] = aux
         z._backward = backward
         return z
     
@@ -125,8 +140,14 @@ class Param():
         return self.data
     
     def __repr__(self):
+        child = ""
+        for c in list(self._prev):
+            if c:
+                child += f"%{c.id}, "
+
+        child = child[:-2]
         if self._op is not None:
-            return f"%{self.id}=" + str(self._op.op_name) + f' shape={self.shape} value=' + (str(self.data)) if self.data is not None else f"%{self.id}=" + str(self._op.op_name) + f' shape={self.shape}'
+            return f"%{self.id} = {str(self._op.op_name)}({child}) shape={self.shape}" 
         else:
             return f"%{self.id}::shape={self.shape}"
 

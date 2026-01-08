@@ -5,7 +5,8 @@ def backward(output, vars):
     To connect the graph, is important to add the grad of the loss wrt to itself as a children.
     """
     from ops.functional import ones_like
-
+        
+    # We need to start from output. The gradient of output with respect to itself is 1.
     grad = ones_like(output)
     grad._backward = None
     grads[output.id] = grad

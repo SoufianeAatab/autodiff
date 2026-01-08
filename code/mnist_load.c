@@ -1,14 +1,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <zlib.h>
-
+#include <time.h>
+#include "conv2d_cmsis.cc"
 #define XTRAIN_PATH "../data/train-images-idx3-ubyte.gz"
 #define YTRAIN_PATH "../data/train-labels-idx1-ubyte.gz"
 
-struct mnist_dataset_t {
+typedef struct {
     float* images;    // Flattened images
     float* labels;    // One-hot encoded labels
-};
+} mnist_dataset_t;
 
 mnist_dataset_t mnist_get_train() {
     mnist_dataset_t ds = {};
@@ -120,4 +121,54 @@ mnist_dataset_t mnist_get_train() {
     free(label_buffer);
 
     return ds;
+}
+
+void set_weights(float* buff, uint32_t size, float k){
+    for(uint32_t i=0;i<size;++i){
+        float random_number = uniform_rand_minus_one_one() * sqrt(k);
+        buff[i] = random_number;
+    }
+}
+
+void print(float* data, uint32_t size){
+    for (uint32_t i =0;i<size;++i){
+        printf("%f, ", data[i]);
+    }
+    printf("\n");
+}
+
+int accuracy(float* data, float* y_ptr, int size){
+    uint32_t predmax = 0, truemax = 0;
+    for(uint32_t k=0;k<size;++k){
+        if (data[predmax] < data[k]) {
+            predmax = k;
+        }
+        if (y_ptr[truemax] < y_ptr[k]) {
+            truemax = k;
+        }
+    }
+    return predmax == truemax;
+}
+
+int main() {
+
+  mnist_dataset_t data = mnist_get_train();
+  float* input_ptr = data.images;
+  float* y_ptr = data.labels;
+  //===================================================
+  float lr = 0.01;
+  float* buf = (float*)calloc(33, sizeof(float));
+  //===================================================
+  for(int i=0;i<16;++i){buf[16+i] = 1;}
+  buf[8] = 1;
+  buf[9] = 1;
+  buf[10] = 1;
+  buf[11] = 1;
+
+  mat_mul(&buf[8] /* (1, 4) */, &buf[16] /* (4, 4) */, &buf[32] /* (1, 4) */, 1, 4, 4, 1, 4, 4, 1, 4); // (1, 4) 
+
+  
+    print(&buf[32], 1);
+    return 0;
+
 }

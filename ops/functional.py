@@ -5,7 +5,7 @@ import math
 
 class ConvOrder(Enum):
     OHWC = 1
-    OCWH = 2
+    OCHW = 2
 
 settings = {}
 
@@ -40,7 +40,7 @@ def matmul(a, b):
     def backward():
         # matmul(x, wT)
         # x @ wT, we're interested in grads wrt to weights and input x
-        grad_out = grads[p.id] # read the current noe output gradient
+        grad_out = grads[p.id] # read the current node output gradient
         dw, dx = p._backward_op(p._op, grad_out)
         # assert dw.shape[0] == z.b.data.data.shape[1] and dw.shape[1] == z.b.data.data.shape[0]
         # assert dx.shape == z.a.data.data.shape, f"{dx.shape}, {z.a.data.data.shape}"
@@ -62,7 +62,8 @@ def sigmoid(x):
     return p
 
 def binary_cross_entropy(input, target):
-    p = Param(None, children=(input,target), shape=input.shape, )
+    assert input.shape == target.shape, "Mismatch shape in binary_cross_entropy"
+    p = Param(None, children=(input,target), shape=(input.shape,target.shape) )
     z = BinaryCrossEntropy(input, target)
     p._op = z
     p._backward_op = get_diff_op('binary_cross_entropy')
@@ -108,7 +109,7 @@ def conv2d(x, kernels, bias, stride = (1,1), padding=(0,0)):
         shape = [1] + shape # append batch size [n,h,w,c]
         
     x.shape = shape
-    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+    if settings['CONV_ORDER'] == ConvOrder.OCHW:
         B, H, W, C = shape[-4], shape[-1], shape[-2], shape[-3]
         kernel_size = kernels.shape[2], kernels.shape[3]
     elif settings['CONV_ORDER'] == ConvOrder.OHWC:
@@ -118,7 +119,7 @@ def conv2d(x, kernels, bias, stride = (1,1), padding=(0,0)):
 
     w_out = (math.floor((W + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
     h_out = (math.floor((H + 2 * padding[1] - kernel_size[1]) / stride[1]) + 1)
-    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+    if settings['CONV_ORDER'] == ConvOrder.OCHW:
         out = Param(None, children=(x, kernels, bias), shape=(B, kernels.shape[0], h_out, w_out))
     elif settings['CONV_ORDER'] == ConvOrder.OHWC:
         out = Param(None, children=(x, kernels, bias), shape=(B, h_out, w_out, kernels.shape[0]))
@@ -140,7 +141,7 @@ def conv2d(x, kernels, bias, stride = (1,1), padding=(0,0)):
 
 def conv2d_transpose(x, kernels, bias, kernel_size = (3,3), stride = (1,1), padding=(0,0)):
     assert 'CONV_ORDER' in settings, "Please set convolution order"
-    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+    if settings['CONV_ORDER'] == ConvOrder.OCHW:
         W, H = x.shape[-2], x.shape[-1]
     else:
         # OWHC
@@ -159,7 +160,7 @@ def max_pool2d(x, kernel_size = (2,2), stride = (1,1), padding=(0,0)):
         shape = [1] + shape # append batch
         
     x.shape = shape
-    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+    if settings['CONV_ORDER'] == ConvOrder.OCHW:
         B, H, W, C = shape[0], shape[-1], shape[-2], shape[-3]
     else:
         # OWHC
@@ -168,7 +169,7 @@ def max_pool2d(x, kernel_size = (2,2), stride = (1,1), padding=(0,0)):
     h_out = (math.floor((H + 2 * padding[0] - kernel_size[0]) / stride[0]) + 1)
     w_out = (math.floor((W + 2 * padding[1] - kernel_size[1]) / stride[1]) + 1)
     print(w_out, h_out)
-    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+    if settings['CONV_ORDER'] == ConvOrder.OCHW:
         out = Param(None, children=(x, ), shape=(B, x.shape[1], h_out, w_out))
     elif settings['CONV_ORDER'] == ConvOrder.OHWC:
         out = Param(None, children=(x, ), shape=(B, h_out, w_out, x.shape[-1]))
@@ -191,7 +192,7 @@ def max_pool2d_diff(x, kernel_size, stride, padding, grad):
         shape = [1] + shape # append batch
         
     x.shape = shape
-    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+    if settings['CONV_ORDER'] == ConvOrder.OCHW:
         B, H, W, C = shape[-4], shape[-1], shape[-2], shape[-3]
     else:
         # OWHC
@@ -199,7 +200,7 @@ def max_pool2d_diff(x, kernel_size, stride, padding, grad):
 
     w_out = W
     h_out = H
-    if settings['CONV_ORDER'] == ConvOrder.OCWH:
+    if settings['CONV_ORDER'] == ConvOrder.OCHW:
         out = Param(None, children=(x, grad), shape=(B, x.shape[1], h_out, w_out))
     else:
         out = Param(None, children=(x, grad), shape=(B, h_out, w_out, x.shape[-1]))

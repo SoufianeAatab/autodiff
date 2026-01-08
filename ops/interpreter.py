@@ -1,21 +1,24 @@
+from ops.param import Param, grads
 class Interpreter:
-    def __init__(self, ops, params):
+    def __init__(self, ops, input, output, params):
         self.ops = ops
         self.mem = {}
         self.total_mem = 0
-        
+        self.require_grads = [param for param in params if param.require_grads]
+        self.input_param = input
+        self.output_param = output
+        self.add_var(input)
+        self.add_var(output)
+        self.mem_buffer_size = 0;
         for param in params:
-            print('id =',param.id, param.var_name,'=>' ,self.total_mem // 4)
-            self.mem[param.id] = self.total_mem // 4
-            if isinstance(param.shape, int):
-                return 4//4
-            dims = list(param.shape)
-            size = 4
-            for dim in dims:
-                size *= dim
-            self.total_mem += size
+            self.add_var(param)
 
         print(self.mem)
+
+    def add_var(self, var):
+        self.mem[var.id] = self.total_mem // 4
+        size = self.compute_linear_size(var)
+        self.total_mem += size
 
     def gen_torch_code(self):
         for operator in self.ops:
@@ -98,8 +101,11 @@ class Interpreter:
             else:
                 print(f"Op {op.op_name} not defined!")
 
-    def compute_linear_size(self, shape):
-        if isinstance(shape, int):
+    def compute_linear_size(self, var):
+        shape = 0
+        if isinstance(var, Param):
+            shape = var.shape
+        elif isinstance(shape, int):
             return 4
         dims = list(shape)
         size = 4
@@ -110,9 +116,11 @@ class Interpreter:
     
     def gen_code(self):
         supported_ops = ['matmul', 'conv2d', 'sum', 'reshape', 'transpose', 'mul', 'add', 'sub', 'exp', 'assign', 'ones_like', 'sigmoid', 'log_softmax', 'sigmoid_diff', 'nll_loss', 'mse', 'const', 'assign', 'max_pool2d', 'max_pool2d_grad', 'binary_cross_entropy', 'binary_cross_entropy_diff']
-        mem_buffer_size = self.total_mem
+        self.mem_buffer_size = self.total_mem
+        code = ""
         for out in self.ops:
             if not out._op:
+                print(f"op not implemented for {out}")
                 continue
             op = out._op
             if op.op_name in supported_ops:
@@ -123,21 +131,21 @@ class Interpreter:
                     size = 1
                     for d in op.a.shape:
                         size *= d
-                    print("for(uint32_t k=0;k<"+str(size)+";++k){")
-                    self.mem[out.id] = mem_buffer_size // 4
-                    print(f"\tbuf[{self.mem[out.id]} + k] = 1.0f;")
-                    print("}")
-                    mem_buffer_size += self.compute_linear_size(out.shape)
+                    code += "for(uint32_t k=0;k<"+str(size)+";++k){\n"
+                    self.mem[out.id] = self.mem_buffer_size // 4
+                    code += f"\tbuf[{self.mem[out.id]} + k] = 1.0f;"
+                    code +="}\n"
+                    self.mem_buffer_size += self.compute_linear_size(out.shape)
 
                 elif op.op_name == "const":
                     size = 1
                     for d in op.x.shape:
                         size *= d
-                    print("for(uint32_t k=0;k<"+str(size)+";++k){")
-                    self.mem[out.id] = mem_buffer_size // 4
-                    print(f"\tbuf[{self.mem[out.id]} + k] = {op.x.data};")
-                    print("}")
-                    mem_buffer_size += self.compute_linear_size(out.shape)
+                    code += "for(uint32_t k=0;k<"+str(size)+";++k){\n"
+                    self.mem[out.id] = self.mem_buffer_size // 4
+                    code += f"\tbuf[{self.mem[out.id]} + k] = {op.x.data};\n"
+                    code += "}\n"
+                    self.mem_buffer_size += self.compute_linear_size(out.shape)
 
                 else:
                     vars = []
@@ -150,31 +158,45 @@ class Interpreter:
                                 # print(child.id,'=>',self.mem[child.id])
                         else:
                             assert 1==-1, f'var not found in memory {child.id} not in memory'
-                    self.mem[out.id] = mem_buffer_size // 4
+                    self.mem[out.id] = self.mem_buffer_size // 4
                     vars.append(self.mem[out.id])
-                    mem_buffer_size += self.compute_linear_size(out.shape)
-                    print(f"{op.get_inference_code(out, vars)} // {out.shape} {out.id}")
+                    self.mem_buffer_size += self.compute_linear_size(out.shape)
+                    code += f"{op.get_inference_code(out, vars)} // {out.shape} {out.id}\n"
             else:
                 print('Missing:', op.op_name)
 
-        print(f"float* buf = (float*)calloc({mem_buffer_size//4}, sizeof(float));")
+        full_code = self.gen_init_params()
+        full_code += f"buf[{self.mem[self.input_param.id]}] = input;\n"
+        full_code += f"buf[{self.mem[self.output_param.id]}] = output;\n"
+        full_code += code
+        if len(self.require_grads) > 0:
+            full_code += self.gen_sgd()
+        return full_code
+
         #print("Memory footprint", mem_buffer_size, "bytes", mem_buffer_size / 1024, 'kb')
 
-    def gen_sgd(self, grads, params):
-        for g in params:
-            grad = grads[g]
+    def gen_sgd(self):
+        print(self.require_grads)
+        code = ""
+        for g in self.require_grads:
+            grad = grads[g.id]
             grad_id = grad.id
+            print(self.mem)
             ptr = self.mem[grad_id]
             size = 1
             for d in grad.shape:
                 size *= d
-            print(f"// sgd for {grad.id}")
-            print("for (uint32_t k=0;k<"+str(size)+";++k){")
-            print(f"\tbuf[{self.mem[g]} + k] -= buf[{ptr} + k] * lr;")
-            print("}")
+            code += f"// sgd for {grad.id}\n"
+            code += "for (uint32_t k=0;k<"+str(size)+";++k){\n"
+            code += f"\tbuf[{self.mem[g.id]} + k] -= buf[{ptr} + k] * lr;\n"
+            code += "}\n"
+        return code
 
-    def gen_init_params(self, params):
-        for param in params:
+    def gen_init_params(self):
+        code = "//===================================================\n"
+        code += "float lr = 0.01;\n";
+        code += f"float* buf = (float*)calloc({self.mem_buffer_size//4}, sizeof(float));\n"
+        for param in self.require_grads:
             # conv param
             if len(param.shape) == 4:
                 k = 1.0 / (param.shape[-1] * param.shape[-2] * param.shape[-3])
@@ -185,8 +207,10 @@ class Interpreter:
             for d in param.shape:
                 size *= d
 
-            print(f"set_weights(&buf[{ptr}], {size}, {k}); // {param.shape}")
+            code += f"set_weights(&buf[{ptr}], {size}, {k}); // {param.shape} {param.id}\n"
 
+        code += "//===================================================\n\n"
+        return code
 
     # def gen_accuracy_test(self, y_pred, y):
     #     size = 1
