@@ -15,6 +15,7 @@ class Matmul(Op):
         a_var = child_vars[0]
         b_var = child_vars[1]
         out_var = child_vars[-1]
+        # print("OPS::MATMUL", child_vars)
         # return f"mat_mul(v_{self.a.id}, v_{self.b.id}, v_{out.id}, {a_rows}, {a_cols}, {a_cols}, 1, {b_rows}, {b_cols}, {b_cols}, 1);"
         return f"mat_mul(&buf[{a_var}] /* {self.a.shape} */, &buf[{b_var}] /* {self.b.shape} */, &buf[{out_var}] /* {out.shape} */, {a_rows}, {a_cols}, {self.a.stride[0]}, {self.a.stride[1]}, {b_rows}, {b_cols}, {self.b.stride[0]}, {self.b.stride[1]});"
 
@@ -107,14 +108,25 @@ class Reshape(Op):
     def get_inference_code(self, operator):
         return f"v_{operator.id} = v_{self.a.id}; // reshaping or transposing, not an operator actually."
     
+import numpy as np
 class Assign(Op):
-    def __init__(self, a):
+    def __init__(self, child, data):
         super().__init__("assign")
-        self.a = a
-        self.child = (self.a,)
+        self.child = child
+        self.child = (self.child,)
+        self.data = data
 
     def get_inference_code(self, operator, child_vars):
-        return f"buf[{child_vars[-1]}] = {self.a}; // {operator.shape}"
+        print("Inside Assign operator", self.child[0].shape, child_vars)
+        if isinstance(self.data, np.ndarray):
+            data = self.data.reshape(-1)
+            code = "buf[" + str(child_vars[0]) +"] = {"
+            for x in data:
+                code += str(x) + ", "
+            code += "};"
+            code += str(operator)
+        return code
+        # return f"buf[{child_vars[-1]}] = {self.child}; // {operator.shape}"
 
 class OnesLike(Op):
     def __init__(self, a):
@@ -390,3 +402,4 @@ class Const(Op):
         for dim in dims:
             size *= dim
         return f"buf[{child_vars[-1]}] = const({self.x});"
+

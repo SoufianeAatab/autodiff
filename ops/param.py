@@ -15,9 +15,13 @@ class Param():
         self.require_grads = require_grads
 
         self._prev = set(children)
-        self._op = None
         self._backward_op = None
         self._backward = None
+
+        if self.data is not None:   
+            self._op = Assign(self, data=self.data)
+        else:
+            self._op = None
 
         strides = []
         list_shape = list(shape)
@@ -27,13 +31,14 @@ class Param():
                 l *= list_shape[i]
             strides.append(l)
 
-        print(f"Strides for {var_name} are {strides}")
+        # print(f"Strides for {var_name} are {strides}")
+        
         self.stride = tuple(strides)
     
     # For transpose we just switch the strides and shape
     def t(self):
         """
-        Transposes the current parameter (matrix) by swapping its shape and strides.
+        Transposes the current parameter by swapping its shape and strides.
         Returns a new Param object representing the transposed matrix.
         """
         # Create a new Param object with swapped shape (rows <-> columns)
@@ -66,9 +71,9 @@ class Param():
 
     def __mul__(self, other):
         if not isinstance(other, Param):
-            out = Param(other, children=(), shape=self.shape)
-            out._op = Assign(other)
-            other = out
+            other = Param(other, children=(), shape=self.shape)
+            # out._op = Assign(other)
+            # other = out
         assert self.shape == other.shape, "Mismatch shape in * operator"
 
         z = Param(None, children=(self, other), shape=self.shape)

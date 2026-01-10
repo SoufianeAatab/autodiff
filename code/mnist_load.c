@@ -123,7 +123,7 @@ mnist_dataset_t mnist_get_train() {
     return ds;
 }
 
-void set_weights(float* buff, uint32_t size, float k){
+void init_weights(float* buff, uint32_t size, float k){
     for(uint32_t i=0;i<size;++i){
         float random_number = uniform_rand_minus_one_one() * sqrt(k);
         buff[i] = random_number;
@@ -150,25 +150,43 @@ int accuracy(float* data, float* y_ptr, int size){
     return predmax == truemax;
 }
 
+bool check(float* a, float* b, int size){
+  for(int i=0;i<size;++i){
+    if (abs(a[i] - b[i]) > 0.0000001) return false;
+  }
+  return true;
+}
+
 int main() {
 
-  mnist_dataset_t data = mnist_get_train();
-  float* input_ptr = data.images;
-  float* y_ptr = data.labels;
-  //===================================================
-  float lr = 0.01;
-  float* buf = (float*)calloc(33, sizeof(float));
-  //===================================================
-  for(int i=0;i<16;++i){buf[16+i] = 1;}
-  buf[8] = 1;
-  buf[9] = 1;
-  buf[10] = 1;
-  buf[11] = 1;
+  // mnist_dataset_t data = mnist_get_train();
+  // float* input_ptr = data.images;
+  // float* y_ptr = data.labels;
+//===================================================
+float lr = 0.01;
+float* buf = (float*)calloc(134, sizeof(float));
+//===================================================
 
-  mat_mul(&buf[8] /* (1, 4) */, &buf[16] /* (4, 4) */, &buf[32] /* (1, 4) */, 1, 4, 4, 1, 4, 4, 1, 4); // (1, 4) 
+//buf[0] = input;
+//buf[4] = output;
+float temp_2[16] = {2, 3, 0, 0, 2, 1, 2, 2, 2, 2, 3, 0, 3, 3, 3, 2, };
+memcpy(&buf[8], temp_2, sizeof(float) * 16 );
+float temp_0[4] = {2, 3, 0, 2, };
+memcpy(&buf[0], temp_0, sizeof(float) * 4 );
+mat_mul(&buf[0] /* (1, 4) */, &buf[8] /* (4, 4) */, &buf[92] /* (1, 4) */, 1, 4, 4, 1, 4, 4, 1, 4); // (1, 4) 5
+sigmoid(&buf[92] /* (1, 4)*/ , &buf[96] /*(1, 4)*/, 4); // (1, 4) 6
+float temp_3[68] = {1, 0, 1, 3, 3, 1, 1, 1, 3, 3, 0, 0, 3, 1, 1, 0, 3, 0, 0, 2, 2, 2, 1, 3, 3, 3, 3, 2, 1, 1, 2, 1, 2, 3, 2, 3, 3, 0, 2, 0, 2, 2, 0, 0, 2, 1, 3, 0, 3, 1, 1, 1,
+ 0, 1, 0, 1, 3, 3, 2, 3, 2, 3, 0, 3, 2, 2, 1, 0, };
+memcpy(&buf[24], temp_3, sizeof(float) * 68 );
+mat_mul(&buf[96] /* (1, 4) */, &buf[24] /* (4, 17) */, &buf[100] /* (1, 17) */, 1, 4, 4, 1, 4, 17, 1, 4); // (1, 17) 8
+sigmoid(&buf[100] /* (1, 17)*/ , &buf[117] /*(1, 17)*/, 17); // (1, 17) 9
 
-  
-    print(&buf[32], 1);
+float ground[17] = 
+{0.99330683212215, 0.9975272069299129, 0.9975272365314249, 0.9933066911402603, 0.9933071039207763, 0.9996646219302764, 0.9999832953530161, 0.9933064193249839, 0.9999545955285666, 0.993306500348989, 0.9820131201941611, 0.9975269885457263, 0.9975272069299129, 0.8807953238363039, 0.999983296111248, 0.9996646315510697, 0.9933065951278168, 
+};
+bool test = check(&buf[117], ground, 17);
+
+if(test) printf("OK!");else printf("NO OK!");
     return 0;
 
 }
