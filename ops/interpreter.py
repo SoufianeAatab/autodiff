@@ -9,7 +9,7 @@ class Interpreter:
         self.input_param = input
         self.output_param = output
         self.add_var(input)
-        self.add_var(output)
+        if output is not None: self.add_var(output)
         self.mem_buffer_size = 0;
         for param in params:
             self.add_var(param)
@@ -37,24 +37,26 @@ class Interpreter:
     
     def gen_code(self):
         supported_ops = ['matmul', 'conv2d', 'sum', 'reshape', 'transpose', 'mul', 'add', 'sub', 'exp', 'assign', 'ones_like', 'sigmoid', 'log_softmax', 'sigmoid_diff', 'nll_loss', 'mse', 'const', 'assign', 'max_pool2d', 'max_pool2d_grad', 'binary_cross_entropy', 'binary_cross_entropy_diff']
-        print("Memory needed for initializing", self.total_mem // 4)
+        # print("Memory needed for initializing", self.total_mem // 4)
         self.mem_buffer_size = self.total_mem
         code = ""
         for out in self.ops:
             # print(self.mem_buffer_size)
             if not out._op:
-                print(f"op not implemented for {out}")
+                print(f"op not implemented for {out._op}")
                 continue
             op = out._op
-            print(op.op_name)
+            # print(op.op_name)
             if op.op_name in supported_ops:
                 if op.op_name in ['transpose', 'reshape']:
                     child = op.a
                     self.mem[out.id] = self.mem[child.id]
                 elif op.op_name == "assign":
                     child = op.child[0]
-                    if isinstance(op.data, np.ndarray):
+                    print(type(op.data), isinstance(op.data, np.ndarray))
+                    if not isinstance(op.data, np.ndarray):
                         data = op.data.reshape(-1)
+                        print("ENTRO A ASSIGN")
                         # code = "buf[" + str(self.mem[child.id]) +"] = {"
                         code += f"float temp_{child.id}["+ str(len(data)) +"] = {"
                         for x in data:
@@ -77,10 +79,10 @@ class Interpreter:
                     size = 1
                     for d in op.x.shape:
                         size *= d
+                    self.mem[out.id] = self.mem_buffer_size // 4
                     code += "for(uint32_t k=0;k<"+str(size)+";++k){\n"
                     code += f"\tbuf[{self.mem[out.id]} + k] = {op.x.data};\n"
                     code += "}\n"
-                    self.mem[out.id] = self.mem_buffer_size // 4
                     self.mem_buffer_size += self.compute_linear_size(out.shape)
                 else:
                     vars = []
@@ -109,7 +111,7 @@ class Interpreter:
 
         full_code = self.gen_init_params()
         full_code += f"//buf[{self.mem[self.input_param.id]}] = input;\n"
-        full_code += f"//buf[{self.mem[self.output_param.id]}] = output;\n"
+        if self.output_param is not None: full_code += f"//buf[{self.mem[self.output_param.id]}] = output;\n"
         full_code += code
         if len(self.require_grads) > 0:
             full_code += self.gen_sgd()
@@ -118,7 +120,7 @@ class Interpreter:
         #print("Memory footprint", mem_buffer_size, "bytes", mem_buffer_size / 1024, 'kb')
 
     def gen_sgd(self):
-        print(self.require_grads)
+        # print(self.require_grads)
         code = ""
         for g in self.require_grads:
             grad = grads[g.id]
@@ -137,8 +139,9 @@ class Interpreter:
     def gen_init_params(self):
         code = "//===================================================\n"
         code += "float lr = 0.01;\n";
-        print("init params", self.mem_buffer_size//4)
+        # print("init params", self.mem_buffer_size//4)
         code += f"float* buf = (float*)calloc({self.mem_buffer_size//4}, sizeof(float));\n"
+        return code
         for param in self.require_grads:
             # conv param
             if len(param.shape) == 4:

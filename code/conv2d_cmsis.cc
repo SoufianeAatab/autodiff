@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <stdbool.h>
 
 float uniform_rand_minus_one_one() {
     #if DEPLOY
@@ -76,13 +77,12 @@ void sigmoid_diff(float* x, float* grad, float* out, uint32_t size) {
     // return out;
 }
 
-float nll_loss(float* y_pred, float* y, uint32_t size){
+void nll_loss(float* y_pred, float* y, float* out,  uint32_t size){
     uint32_t imax = 0;
-    for(uint32_t i=0;i<size;++i) {
-        if (y[i] == 1) imax = i;
+    for (uint32_t i=0;i<size;++i){
+      if (y[i] > y[imax]) imax = i;
     }
-    float loss = -y_pred[imax];
-    return loss;
+    out[0] = -y_pred[imax];
 }
 
 float binary_cross_entropy(float* y_hat, float*y){
@@ -91,7 +91,8 @@ float binary_cross_entropy(float* y_hat, float*y){
 }
 
 float binary_cross_entropy_diff(float* y_hat, float*y, float* out_grad){
-    out_grad[0] = (y_hat[0] - y[0]) / (y_hat[0] * (1 - y_hat[0]));    
+    out_grad[0] = (y_hat[0] - y[0]) / (y_hat[0] * (1 - y_hat[0]));   
+    return out_grad[0];
 }
 
 float mse(float* y_pred, float* y, uint32_t size){
@@ -436,6 +437,17 @@ void add(float* a, float *b, float* c, uint32_t size) {
     }
 }
 
+// (n,m) * (n,1)
+// b is always the "smaller" vector
+// TODO: add for batch dimension, for now I keep n=1
+void add_b_n_1(float* a, float* b, float* out, uint32_t m_size){
+  for(uint32_t i=0;i<m_size;++i){
+    if (i == b[0]){
+      out[i] = a[i] - 1;
+    }
+  }
+}
+
 void sub(float* a, float *b, float* c, uint32_t size) {
     float* a_ptr = a;
     float* b_ptr = b;
@@ -450,7 +462,8 @@ void sub(float* a, float *b, float* c, uint32_t size) {
     }
 }
 
-void exp(float* a, float *b, uint32_t size) {
+// exp conflicts with math.h exp
+void exp_(float* a, float *b, uint32_t size) {
     float* a_ptr = a;
     float* b_ptr = b;
     while(size){
@@ -462,6 +475,7 @@ void exp(float* a, float *b, uint32_t size) {
     }
 }
 
+#if 0
 #if __arm__
 __STATIC_FORCEINLINE 
 #else
@@ -799,3 +813,5 @@ arm_cmsis_nn_status arm_convolve_NHWC( float* ctx_buf,
 //     //     db[out] += dbias;
 //     // }
 // }
+//
+#endif

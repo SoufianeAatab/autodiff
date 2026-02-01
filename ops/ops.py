@@ -25,7 +25,9 @@ class Add(Op):
         self.a = a
         self.b = b
         self.child = (self.a, self.b)
-
+        self.broadcast = a.shape[0] == b.shape[0] and a.shape[1] > b.shape[0] and a.shape[1] % b.shape[1] == 0
+        print("OPS::ADD", a.shape, b.shape, self.broadcast)
+    
     def get_inference_code(self, operator, child_vars):
         dims = list(self.a.shape)
         size = 1
@@ -35,9 +37,13 @@ class Add(Op):
         a_var = child_vars[0]
         b_var = child_vars[1]
         out_var = child_vars[-1]
-        # return f"add(v_{self.a.id}, v_{self.b.id}, v_{operator.id}, {size});"
         return f"add(&buf[{a_var}], &buf[{b_var}], &buf[{out_var}], {size});"
-    
+        # if not self.broadcast:
+        # else:
+            # temp_a = a_var if self.a.shape[1] > self.b.shape[1] else b_var
+            # temp_b = a_var if self.b.shape[1] > self.a.shape[1] else b_var
+            # buf[154 + (int)buf[4]] = buf[137+ (int)buf[4]] - buf[136];
+            # return f"add_b_n_1(&buf[{temp_a}], &buf[{temp_b}], &buf[{out_var}], {size});"
 class Sub(Op):
     def __init__(self, a, b):
         super().__init__('sub')
@@ -62,6 +68,7 @@ class Mul(Op):
         self.a = a
         self.b = b
         self.child = (self.a, self.b)
+        print("OPS::MUL", a.shape, b.shape)
 
     def get_inference_code(self, operator, child_vars):
         dims = list(self.a.shape)
@@ -96,7 +103,7 @@ class Exp(Op):
         size = 1
         for dim in dims:
             size *= dim
-        return f"exp(&buf[{child_var[0]}], &buf[{child_var[-1]}], {size});"
+        return f"exp_(&buf[{child_var[0]}], &buf[{child_var[-1]}], {size});"
     
 class Reshape(Op):
     def __init__(self, a, shape):
@@ -350,7 +357,7 @@ class NLLLoss(Op):
         size = 1
         for dim in dims:
             size *= dim
-        return f"buf[{child_var[-1]}] = nll_loss(&buf[{child_var[0]}], &buf[{child_var[1]}], {size});"
+        return f"nll_loss(&buf[{child_var[0]}], &buf[{child_var[1]}], &buf[{child_var[-1]}], {size});"
     
 class LogSoftmax(Op):
     def __init__(self, x):

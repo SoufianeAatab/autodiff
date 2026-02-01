@@ -224,6 +224,7 @@ def nll_loss(input, target):
     z._backward_op = get_diff_op('nll_loss')
     def backward():
         grad_out = grads[z.id]
+        # print(grad_out)
         dldy, dldy_hat = z._backward_op((op.input, op.target), grad_out)
         grads[op.input.id] = dldy_hat
         grads[op.target.id] = dldy

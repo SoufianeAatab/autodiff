@@ -6,6 +6,7 @@ def linear_diff_op(args, grad):
     w_t = w.t() 
     dw = matmul(g_t, x)
     da = matmul(grad, w_t)
+    print("IDS:", dw.id)
     return dw, da
 
 def conv2d_diff_op(args, grad):
@@ -63,7 +64,9 @@ def binary_cross_entropy_diff_op(args, grad):
     dldy = const(1, target.shape)
     return dldy_hat, dldy
 
-
+import numpy as np
+from ops.ops import Assign
+from ops.param import Param
 def nll_loss(args, grad):
     y_hat, y = args
     """ Gradient of log_softmax
@@ -77,12 +80,15 @@ def nll_loss(args, grad):
         NLL = - sum(y[i] * a[i]); a as the activation values of the last layer, and y is one hot vector
         NLL = -a[y] => when using sparse y_true. y index of y_true
     """
-    dldy = -grad * y_hat
+    # dldy = -grad * y_hat
+    print(grad.shape, y.shape)
     dldy_hat = -grad * y
-    return dldy, dldy_hat
+    return None, dldy_hat
 
 def log_softmax_diff(args, grad):
     x, a = args
     # assuming we're using nll as a loss function
-    dldz = a.exp() + grad 
+    # grad = zeros(1,17) with grad in y th index
+
+    dldz = a.exp() + grad
     return dldz
