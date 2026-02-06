@@ -10,21 +10,13 @@ The generated C code has minimal dependencies and can be compiled for embedded d
 
 ## Implemented Operators
 
-## Implemented Operators
-
-**Layers:**
-- Linear
-- Conv2d
-- MaxPool2d
-- LogSoftmax
-- NLL Loss, MSE Loss
-
-**Activations:**
-- Sigmoid
-- ReLU
-- Tanh
-
-## Usage
+- MatMul [Done]
+- Conv2d [WIP]
+- MaxPool2d [WIP]
+- LogSoftmax [DONE]
+- Sigmoid [DONE]
+- NLL Loss [DONE]
+- MSE Loss [WIP]
 
 ## Usage
 
