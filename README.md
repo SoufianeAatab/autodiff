@@ -1,84 +1,115 @@
-# Autodiff: Automatic Differentiation for Training Neural Networks on IoT Devices
-During my thesis on "Training Neural Networks on IoT Devices," I faced challenges building neural network models in plain C and deploying them for on-device training. This involved creating operators and making sure they could calculate both forward and backward passes, handling inputs, and gradients from the loss function. It was tricky, and everything needed to fit just right. Since then, I've wanted to make a tool to automate this process. Recently, I found Andrej Karpathy's micrograd project on GitHub, which inspired me to start. 
+# Autodiff: Automatic Differentiation for Neural Networks in C
 
-Implemented layers so far:
------------------------
-- Linear Layer
-- Conv2d Layer
-- Maxpool2d Layer
-- LogSoftmax Layer
-- NLL & Mse Loss Layers
-- Activation Functions
-    - Sigmoid
-    - Relu
-    - Tanh
- 
-Example usage:
------------
-main.py
+An automatic differentiation framework that generates standalone C code for training neural networks. The backward pass is computed during code generation rather than at runtime. Inspired by [Andrej Karpathy's micrograd](https://github.com/karpathy/micrograd).
+
+## Background
+
+This project emerged from my thesis on "Training Neural Networks on IoT Devices," where implementing forward and backward passes for each operator manually was time-consuming and error-prone. This tool automates that process by generating C code from a Python model definition.
+
+The generated C code has minimal dependencies and can be compiled for embedded devices. Custom operators can be implemented separately without recomputing the backward graph.
+
+## Implemented Operators
+
+## Implemented Operators
+
+**Layers:**
+- Linear
+- Conv2d
+- MaxPool2d
+- LogSoftmax
+- NLL Loss, MSE Loss
+
+**Activations:**
+- Sigmoid
+- ReLU
+- Tanh
+
+## Usage
+
+## Usage
+
+Define a model using the Python API:
+
 ```python
 from ops.param import Param, grads
 from ops.interpreter import Interpreter
 from ops.functional import *
 from ops.graph import backward
 
-# Data placeholder
-input = Param(None, var_name='input', shape=(1,28*28))
-output = Param(None, var_name='output', shape=(1,10))
+# Data placeholders
+input = Param(None, var_name='input', shape=(1, 28*28))
+output = Param(None, var_name='output', shape=(1, 10))
 
-# Define model params, no need for setting data.
-w1 = Param(None, shape=(32,28*28), var_name='w1')
-w2 = Param(None, shape=(10,32), var_name='w2')
+# Model parameters
+w1 = Param(None, shape=(32, 28*28), var_name='w1')
+w2 = Param(None, shape=(10, 32), var_name='w2')
 
-# forward pass
-w_t = w1.t()
-z = matmul(input,w_t)
+# Forward pass
+z = matmul(input, w1.t())
 a = sigmoid(z)
 z2 = matmul(a, w2.t())
 a2 = log_softmax(z2)
 loss = nll_loss(a2, output)
 
-# backward function receives the last operator of the model and its inputs
+# Build backward graph
 graph = backward(loss, [w1.id, w2.id])
 ops = graph.build()
 
+# Generate C code
 interpreter = Interpreter(ops, [w1, w2, input, output])
-# gen C code
 interpreter.gen_code()
-param_grads = [w1.id, w2.id]
-# generate sgd to update weights
-interpreter.gen_sgd(grads, param_grads)
+interpreter.gen_sgd(grads, [w1.id, w2.id])
 ```
 
-# Instructions
-run 
-```python main.py``` thiss command will generate and output the following code in c containg the forward + backward + sgd, ready to be used.
+Run:
+```bash
+python main.py
+```
+
+See [`main.py`](main.py) for complete example.
+
+## Generated Code
+
+Example output:
+
 ```c
 float* buf = (float*)calloc(51828, sizeof(float));
-mat_mul(&input_ptr[l * 784] /* (1, 784) */, &buf[0] /* (784, 32) */, &buf[26202] /* (1, 32) */, 1, 784, 784, 1, 784, 32, 1, 784); // (1, 32) 5
-sigmoid(&buf[26202] /* (1, 32)*/ , &buf[26234] /*(1, 32)*/, 32); // (1, 32) 6
-mat_mul(&buf[26234] /* (1, 32) */, &buf[25088] /* (32, 10) */, &buf[26266] /* (1, 10) */, 1, 32, 32, 1, 32, 10, 1, 32); // (1, 10) 8
-log_softmax(&buf[26266], &buf[26276], 10); // (1, 10) 9
-exp(&buf[26276], &buf[26286], 10); // (1, 10) 18
-buf[26296] = nll_loss(&buf[26276], &y_ptr[l*10], 10); // (1, 10) 10
-for(uint32_t k=0;k<10;++k){
-    buf[26306+k] = 1;
-    buf[26316+k] = -1; // (1, 10) 12
-}
-mul(&buf[26306], &buf[26316], &buf[26326], 10); // (1, 10) 16
-mul(&buf[26326], &y_ptr[l*10], &buf[26336], 10); // (1, 10) 17
-add(&buf[26286], &buf[26336], &buf[26346], 10); // (1, 10) 19
-mat_mul(&buf[26346] /* (1, 10) */, &buf[25088] /* (10, 32) */, &buf[26356] /* (1, 32) */, 1, 10, 10, 1, 10, 32, 32, 1); // (1, 32) 23
-sigmoid_diff(&buf[26202], &buf[26356], &buf[26388], 32); // (1, 32) 24
-mat_mul(&buf[26388] /* (32, 1) */, &input_ptr[l * 784]  /* (1, 784) */, &buf[26420] /* (32, 784) */, 32, 1, 1, 32, 1, 784, 784, 1); // (32, 784) 27
-mat_mul(&buf[26346] /* (10, 1) */, &buf[26234] /* (1, 32) */, &buf[51508] /* (10, 32) */, 10, 1, 1, 10, 1, 32, 32, 1); // (10, 32) 22
 
-for (uint32_t k=0;k<25088;++k){
+// Forward pass
+mat_mul(&input_ptr[l * 784], &buf[0], &buf[26202], 1, 784, 784, 1, 784, 32, 1, 784);
+sigmoid(&buf[26202], &buf[26234], 32);
+mat_mul(&buf[26234], &buf[25088], &buf[26266], 1, 32, 32, 1, 32, 10, 1, 32);
+log_softmax(&buf[26266], &buf[26276], 10);
+buf[26296] = nll_loss(&buf[26276], &y_ptr[l*10], 10);
+
+// Backward pass
+mul(&buf[26306], &buf[26316], &buf[26326], 10);
+// ... gradient computation ...
+
+// SGD update
+for (uint32_t k=0; k<25088; ++k) {
     buf[0 + k] -= buf[26420 + k] * lr;
 }
-for (uint32_t k=0;k<320;++k){
-    buf[25088 + k] -= buf[51508 + k] * lr;
-}
 ```
-Feel free to try it out and contribute to the development effort!
 
+The generated code can be compiled with any C compiler.
+
+## Testing
+
+Gradients are validated against PyTorch to ensure correctness of the backward pass.
+
+## Installation
+
+```bash
+git clone <your-repo-url>
+cd autodiff
+pip install -r requirements.txt  # PyTorch, only needed for testing
+```
+
+## Notes
+
+This is a personal side project. The basic operators work but the codebase is not extensively tested or optimized.
+
+## Acknowledgments
+
+Inspired by [micrograd](https://github.com/karpathy/micrograd) by Andrej Karpathy.
