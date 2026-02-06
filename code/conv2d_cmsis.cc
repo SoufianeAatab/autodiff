@@ -188,7 +188,7 @@ uint32_t b_rows, uint32_t b_cols, uint32_t b_stride1, uint32_t b_stride2) {
     return c;
 }
 
-float* mat_mul(float* a_data, float* b_data, float* c_data, 
+void mat_mul(float* a_data, float* b_data, float* c_data, 
                uint32_t a_rows, uint32_t a_cols, uint32_t a_stride1, uint32_t a_stride2, 
                uint32_t b_rows, uint32_t b_cols, uint32_t b_stride1, uint32_t b_stride2) {
     float* a = a_data;
@@ -208,7 +208,6 @@ float* mat_mul(float* a_data, float* b_data, float* c_data,
             *c_data++ = sum;
         }
     }
-    return c_data;
 }
 
 void sum(float* data, float* out, uint8_t dim, uint32_t rows, uint32_t cols) {

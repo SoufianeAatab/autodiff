@@ -39,6 +39,7 @@ class Interpreter:
         supported_ops = ['matmul', 'conv2d', 'sum', 'reshape', 'transpose', 'mul', 'add', 'sub', 'exp', 'assign', 'ones_like', 'sigmoid', 'log_softmax', 'sigmoid_diff', 'nll_loss', 'mse', 'const', 'assign', 'max_pool2d', 'max_pool2d_grad', 'binary_cross_entropy', 'binary_cross_entropy_diff']
         # print("Memory needed for initializing", self.total_mem // 4)
         self.mem_buffer_size = self.total_mem
+        self.temp_assign = []
         code = ""
         for out in self.ops:
             # print(self.mem_buffer_size)
@@ -52,19 +53,18 @@ class Interpreter:
                     child = op.a
                     self.mem[out.id] = self.mem[child.id]
                 elif op.op_name == "assign":
+                    code_assign = ""
                     child = op.child[0]
-                    print(type(op.data), isinstance(op.data, np.ndarray))
                     if not isinstance(op.data, np.ndarray):
                         data = op.data.reshape(-1)
-                        print("ENTRO A ASSIGN")
                         # code = "buf[" + str(self.mem[child.id]) +"] = {"
-                        code += f"float temp_{child.id}["+ str(len(data)) +"] = {"
+                        code_assign += f"float temp_{child.id}["+ str(len(data)) +"] = {"
                         for x in data:
-                            code += str(x) + ", "
-                        code += "};\n"
-                        code += "memcpy(&buf["+ str(self.mem[child.id]) + f"], temp_{child.id}, sizeof(float) * {len(data)} );\n"
-                        #code += str(operator)
+                            code_assign += str(x) + ", "
+                        code_assign += "};\n"
+                        code_assign += "memcpy(&buf["+ str(self.mem[child.id]) + f"], temp_{child.id}, sizeof(float) * {len(data)} );\n"
                     self.mem[out.id] = self.mem[child.id]
+                    self.temp_assign.append(code_assign)
                 elif op.op_name == "ones_like":
                     size = 1
                     for d in op.a.shape:
@@ -95,23 +95,18 @@ class Interpreter:
                                 # print(child.id,'=>',self.mem[child.id])
                         else:
                             assert 1==-1, f'var not found in memory {child.id} not in memory'
-                    # self.add_var(out)
-                    #print(f"INTERPRETER::{op.op_name}", vars)
                     self.mem[out.id] = self.mem_buffer_size // 4
-                    #print(f"INTERPRETER::{op.op_name}", self.mem)
                     vars.append(self.mem[out.id])
-                    #print("#####", self.compute_linear_size(out.shape), self.mem_buffer_size)
                     self.mem_buffer_size += self.compute_linear_size(out.shape)
-                    #print("######", self.mem_buffer_size, out.shape)
                     code += f"{op.get_inference_code(out, vars)} // {out.shape} {out.id}\n"
             else:
                 print('Missing:', op.op_name)
 
         print("memory needed after running interpreter", self.mem_buffer_size)
 
-        full_code = self.gen_init_params()
-        full_code += f"//buf[{self.mem[self.input_param.id]}] = input;\n"
-        if self.output_param is not None: full_code += f"//buf[{self.mem[self.output_param.id]}] = output;\n"
+        # full_code = self.gen_init_params()
+        full_code = f"//buf[{self.mem[self.input_param.id]}] = Note: this ptr is where the input data should be.\n"
+        if self.output_param is not None: full_code += f"//buf[{self.mem[self.output_param.id]}] = output; // Note: this ptr is where output data should be.\n"
         full_code += code
         if len(self.require_grads) > 0:
             full_code += self.gen_sgd()

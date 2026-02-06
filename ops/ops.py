@@ -357,7 +357,7 @@ class NLLLoss(Op):
         size = 1
         for dim in dims:
             size *= dim
-        return f"nll_loss(&buf[{child_var[0]}], &buf[{child_var[1]}], &buf[{child_var[-1]}], {size});"
+        return f"nll_loss(&buf[{child_var[0]}], &buf[{child_var[1]}], &buf[{child_var[-1]}], {size});\nloss+=buf[{child_var[-1]}];"
     
 class LogSoftmax(Op):
     def __init__(self, x):
