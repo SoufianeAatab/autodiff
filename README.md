@@ -1,6 +1,6 @@
 # Autodiff: Automatic Differentiation for Neural Networks in C
 
-An automatic differentiation framework that generates standalone C code for training neural networks. The backward pass is computed during code generation rather than at runtime. Inspired by [Andrej Karpathy's micrograd](https://github.com/karpathy/micrograd).
+An automatic differentiation framework that generates standalone C code for training neural networks. The backward pass is computed during code generation rather than at runtime.
 
 ## Background
 
