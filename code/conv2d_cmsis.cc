@@ -210,6 +210,29 @@ void mat_mul(float* a_data, float* b_data, float* c_data,
     }
 }
 
+float* mat_mul2(float* a_data, float* b_data, float* c_data, 
+               uint32_t a_rows, uint32_t a_cols, uint32_t a_stride1, uint32_t a_stride2, 
+               uint32_t b_rows, uint32_t b_cols, uint32_t b_stride1, uint32_t b_stride2) {
+    float* a = a_data;
+    float* b = b_data;
+    float* c = c_data;
+
+    // Iterate through the result matrix
+    for (uint32_t i = 0; i < a_rows; ++i) {
+        for (uint32_t j = 0; j < b_cols; ++j) {
+            // Compute the dot product of row i of matrix a and column j of matrix b
+            float sum = 0;
+            for (uint32_t k = 0; k < a_cols; ++k) {
+                // printf("%f * %f\n", a[i * a_stride1 + k * a_stride2] * b[k * b_stride1 + j * b_stride2]);
+                sum += a[i * a_stride1 + k * a_stride2] * b[k * b_stride1 + j * b_stride2];
+            }
+            // Store the result in the corresponding element of matrix c
+            *c_data++ = sum;
+        }
+    }
+    return c;
+}
+
 void sum(float* data, float* out, uint8_t dim, uint32_t rows, uint32_t cols) {
     if ( dim == 1){
         for (uint32_t i = 0; i < rows; ++i){
@@ -474,7 +497,7 @@ void exp_(float* a, float *b, uint32_t size) {
     }
 }
 
-#if 0
+
 #if __arm__
 __STATIC_FORCEINLINE 
 #else
@@ -619,121 +642,81 @@ void max_pool_backward(const float *grad_output, const float *input, float *grad
         }
     }
 }
-
-arm_cmsis_nn_status arm_convolve_NHWC( float* ctx_buf,
-                                           uint32_t pad_x, uint32_t pad_y, uint32_t stride_x, uint32_t stride_y,
-                                           uint32_t out_activation_min, uint32_t out_activation_max,
-                                           uint32_t input_batches, uint32_t input_x, uint32_t input_y, uint32_t input_ch, uint32_t kernel_x, uint32_t kernel_y, uint32_t rhs_cols,
-                                           float *input_data,
-                                           float *filter_data,
-                                           uint32_t output_x, uint32_t output_y, uint32_t output_ch,
-                                          float *output_data)
+void arm_convolve(float* ctx_buf, uint32_t pad_x, uint32_t pad_y, 
+    uint32_t stride_x, uint32_t stride_y,
+    int32_t out_activation_min, int32_t out_activation_max,
+    uint32_t input_batches, 
+    uint32_t input_ch, uint32_t input_y, uint32_t input_x,  // Changed order: N,C,H,W
+    uint32_t kernel_x, uint32_t kernel_y, uint32_t rhs_cols,
+    float *input_data,
+    float *filter_data,
+    uint32_t output_ch, uint32_t output_y, uint32_t output_x,  // Changed order: N,C,H,W
+    float *output_data)
 {
     float *buffer_a = ctx_buf;
-    for (int i_batch = 0; i_batch < input_batches; i_batch++)
+    
+    for (uint32_t i_batch = 0; i_batch < input_batches; i_batch++)
     {
-        /* Generate two columns from the input tensor a GEMM computation */
-        float *two_column_buf = buffer_a;
         float *out = output_data;
-        /* This part implements the im2col function */
-        for (int32_t i_out_y = 0; i_out_y < output_y; i_out_y++)
+        
+        /* Process each output channel */
+        for (uint32_t o_ch = 0; o_ch < output_ch; o_ch++)
         {
-            for (int32_t i_out_x = 0; i_out_x < output_x; i_out_x++)
+            /* Process each output spatial location */
+            for (int32_t i_out_y = 0; i_out_y < output_y; i_out_y++)
             {
-                for (int32_t i_ker_y = i_out_y * stride_y - pad_y; i_ker_y < i_out_y * stride_y - pad_y + kernel_y;
-                     i_ker_y++)
+                for (int32_t i_out_x = 0; i_out_x < output_x; i_out_x++)
                 {
-
-                    for (int32_t i_ker_x = i_out_x * stride_x - pad_x; i_ker_x < i_out_x * stride_x - pad_x + kernel_x;
-                         i_ker_x++)
+                    float sum = 0;
+                    
+                    /* Convolve over input channels and kernel */
+                    for (uint32_t i_ch = 0; i_ch < input_ch; i_ch++)
                     {
-                        if (i_ker_y < 0 || i_ker_y >= input_y || i_ker_x < 0 || i_ker_x >= input_x) {
-                            /* Filling 0 for out-of-bound paddings */
-                            memset((int8_t *)two_column_buf, 0, sizeof(float) * input_ch);
-                        } else {
-                            arm_memcpy((int8_t *)two_column_buf, (const int8_t *)(input_data + (i_ker_y * input_x + i_ker_x) * input_ch), input_ch * sizeof(float) * 2);
+                        for (int32_t i_ker_y = 0; i_ker_y < kernel_y; i_ker_y++)
+                        {
+                            for (int32_t i_ker_x = 0; i_ker_x < kernel_x; i_ker_x++)
+                            {
+                                int32_t in_y = i_out_y * stride_y - pad_y + i_ker_y;
+                                int32_t in_x = i_out_x * stride_x - pad_x + i_ker_x;
+                                
+                                float input_val = 0.0f;
+                                if (in_y >= 0 && in_y < input_y && in_x >= 0 && in_x < input_x)
+                                {
+                                    /* NCHW: input[batch][channel][y][x] */
+                                    uint32_t input_idx = i_ch * (input_y * input_x) + 
+                                                        in_y * input_x + 
+                                                        in_x;
+                                    input_val = input_data[input_idx];
+                                }
+                                
+                                /* Filter layout: [out_ch][in_ch][ker_y][ker_x] */
+                                uint32_t filter_idx = o_ch * (input_ch * kernel_y * kernel_x) +
+                                                     i_ch * (kernel_y * kernel_x) +
+                                                     i_ker_y * kernel_x +
+                                                     i_ker_x;
+                                float filter_val = filter_data[filter_idx];
+                                
+                                sum += input_val * filter_val;
+                            }
                         }
-                        two_column_buf += input_ch;
                     }
-                }
-                
-                /* Computation is filed for every 1 columns */
-                if (two_column_buf == buffer_a + 2 * rhs_cols)
-                {
-                    out = mat_mul(filter_data, buffer_a, out, 
-                    output_ch, rhs_cols, rhs_cols, 1,
-                    rhs_cols, 2, 2, 1);
-                    /* Counter reset */
-                    two_column_buf = buffer_a;
+                    
+                    /* Apply activation */
+                    sum = MAX(sum, (float)out_activation_min);
+                    sum = MIN(sum, (float)out_activation_max);
+                    
+                    /* NCHW: output[batch][channel][y][x] */
+                    *out++ = sum;
                 }
             }
         }
-
-        /* Left-over because odd number of output pixels */
-        if (two_column_buf != buffer_a)
-        {
-            const float *ker_a = filter_data;
-            int i;
-
-            for (i = 0; i < output_ch; i++)
-            {
-                /* Init the accumulator*/
-                float sum = 0;
-
-                /* Point to the beginning of the im2col buffer where the input is available as a rearranged column */
-                const float *ip_as_col = buffer_a;
-
-                /* 4 multiply and accumulates are done in one loop. */
-                int32_t col_count = rhs_cols >> 2;
-
-                while (col_count)
-                {
-                    float ker_a1, ker_a2, ker_a3, ker_a4;
-                    float ip_b1, ip_b2, ip_b3, ip_b4;
-
-                    ker_a1 = *ker_a++;
-                    ip_b1 = *ip_as_col++;
-                    sum += ker_a1 * ip_b1;
-
-                    ker_a2 = *ker_a++;
-                    ip_b2 = *ip_as_col++;
-                    sum += ker_a2 * ip_b2;
-
-                    ker_a3 = *ker_a++;
-                    ip_b3 = *ip_as_col++;
-                    sum += ker_a3 * ip_b3;
-
-                    ker_a4 = *ker_a++;
-                    ip_b4 = *ip_as_col++;
-                    sum += ker_a4 * ip_b4;
-
-                    col_count--;
-                }
-                /* Handle left over mac */
-                col_count = rhs_cols & 0x3;
-                while (col_count)
-                {
-                    float ker_a1 = *ker_a++;
-                    float ip_b1 = *ip_as_col++;
-                    sum += ker_a1 * ip_b1;
-
-                    col_count--;
-                }
-                sum = MAX(sum, out_activation_min);
-                sum = MIN(sum, out_activation_max);
-                *out++ = (float)sum;
-            }
-        }
-
+        
         /* Advance to the next batch */
-        input_data += (input_x * input_y * input_ch);
-        output_data += (output_x * output_y * output_ch);
+        input_data += (input_ch * input_y * input_x);
+        output_data += (output_ch * output_y * output_x);
     }
-
-    /* Return to application */
-    return ARM_CMSIS_NN_SUCCESS;
 }
-
+#if 0
 // void bp_convolve2d(float* ctx_buf, uint32_t pad_x, uint32_t pad_y, uint32_t stride_x, uint32_t stride_y,
 //                                            uint32_t out_activation_min, uint32_t out_activation_max,
 //                                            uint32_t input_batches, uint32_t input_x, uint32_t input_y, uint32_t input_ch, uint32_t kernel_x, uint32_t kernel_y, uint32_t rhs_cols,

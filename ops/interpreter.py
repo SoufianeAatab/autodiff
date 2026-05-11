@@ -1,7 +1,7 @@
 from ops.param import Param, grads
 import numpy as np
 class Interpreter:
-    def __init__(self, ops, input, output, params):
+    def __init__(self, ops, input, output = None, params=None):
         self.ops = ops
         self.mem = {}
         self.total_mem = 0
@@ -10,11 +10,9 @@ class Interpreter:
         self.output_param = output
         self.add_var(input)
         if output is not None: self.add_var(output)
-        self.mem_buffer_size = 0;
+        self.mem_buffer_size = 0
         for param in params:
             self.add_var(param)
-
-        # print(self.mem)
 
     def add_var(self, var):
         if var.id not in self.mem:
@@ -94,7 +92,7 @@ class Interpreter:
                             # if op.op_name == 'matmul':
                                 # print(child.id,'=>',self.mem[child.id])
                         else:
-                            assert 1==-1, f'var not found in memory {child.id} not in memory'
+                            assert 1==-1, f'var not found in memory {child} not in memory'
                     self.mem[out.id] = self.mem_buffer_size // 4
                     vars.append(self.mem[out.id])
                     self.mem_buffer_size += self.compute_linear_size(out.shape)
@@ -105,7 +103,7 @@ class Interpreter:
         print("memory needed after running interpreter", self.mem_buffer_size)
 
         # full_code = self.gen_init_params()
-        full_code = f"//buf[{self.mem[self.input_param.id]}] = Note: this ptr is where the input data should be.\n"
+        full_code = f"// buf[{self.mem[self.input_param.id]}] = Note: this ptr is where the input data should be.\n"
         if self.output_param is not None: full_code += f"//buf[{self.mem[self.output_param.id]}] = output; // Note: this ptr is where output data should be.\n"
         full_code += code
         if len(self.require_grads) > 0:
@@ -136,7 +134,7 @@ class Interpreter:
         code += "float lr = 0.01;\n";
         # print("init params", self.mem_buffer_size//4)
         code += f"float* buf = (float*)calloc({self.mem_buffer_size//4}, sizeof(float));\n"
-        return code
+        # return code
         for param in self.require_grads:
             # conv param
             if len(param.shape) == 4:

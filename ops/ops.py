@@ -205,6 +205,7 @@ class Sum(Op):
         x = child_vars[0]
         out = child_vars[-1]
         return f"sum(&buf[{x}], &buf[{out}], {self.dim}, {self.x.shape[0]}, {self.x.shape[1]});"
+import math
 
 class Conv2d(Op):
     def __init__(self, x, kernels, bias, kernel_size, stride, padding):
@@ -225,32 +226,26 @@ class Conv2d(Op):
         # Todo: 
         out_activation_min = -6
         out_activation_max = 6
-        input_batches = 1
-        from ops.functional import settings, ConvOrder
-        if settings['CONV_ORDER'] == ConvOrder.OCWH:
-            input_x = self.x.shape[2]
-            input_y = self.x.shape[3]
-            input_ch = self.x.shape[1]
-        elif settings['CONV_ORDER'] == ConvOrder.OHWC:
-            input_y = self.x.shape[1]
-            input_x = self.x.shape[2]
-            input_ch = self.x.shape[3]  
 
         kernel_x = self.kernel_size[0]
         kernel_y = self.kernel_size[1]
-        rhs_cols = input_ch * kernel_x * kernel_y
-        import math
-        w_out = (math.floor((input_x + 2 * pad_x - kernel_x) / stride_x) + 1)
-        h_out = (math.floor((input_y + 2 * pad_y - kernel_y) / stride_y) + 1)
+        from ops.functional import settings, ConvOrder
+        if settings['CONV_ORDER'] == ConvOrder.OCHW:
+            input_x = self.x.shape[3]
+            input_y = self.x.shape[2]
+            input_ch = self.x.shape[1]
+            input_batch = self.x.shape[0]
+            w_out = (math.floor((input_x + 2 * pad_x - kernel_x) / stride_x) + 1)
+            h_out = (math.floor((input_y + 2 * pad_y - kernel_y) / stride_y) + 1)
+            rhs_cols = input_ch * kernel_x * kernel_y
+        elif settings['CONV_ORDER'] == ConvOrder.OHWC:
+            pass
         ch_out = self.kernels.shape[0]
-
-        # print(input_x, input_y, kernel_x, kernel_y, w_out , w_out , ch_out , rhs_cols)
         assert w_out > 0 and w_out > 0 and ch_out > 0 and rhs_cols > 0
         x = child_vars[0]
         filters = child_vars[1]
         out = child_vars[-1]
-        # (1, 3, 3, 8) [1, 28, 28, 1] (8, 26, 26, 1)
-        return f"arm_convolve_NHWC( ctx, {pad_x}, {pad_y}, {stride_x}, {stride_y},{out_activation_min}, {out_activation_max}, {input_batches}, {input_x}, {input_y}, {input_ch}, {kernel_x}, {kernel_y}, {rhs_cols}, &buf[{x}], &buf[{filters}], {w_out}, {h_out}, {ch_out},&buf[{out}]);"
+        return f"arm_convolve( ctx, {pad_x}, {pad_y}, {stride_x}, {stride_y},{out_activation_min}, {out_activation_max}, {input_batch}, {input_ch}, {input_x}, {input_y}, {kernel_x}, {kernel_y}, {rhs_cols}, &buf[{x}], &buf[{filters}], {ch_out}, {h_out}, {w_out},&buf[{out}]);"
         
 class MaxPool2d(Op):
     def __init__(self, x, kernel_size, stride, padding):

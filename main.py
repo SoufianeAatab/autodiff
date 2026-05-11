@@ -14,5 +14,5 @@ register_diff_op('log_softmax', log_softmax_diff)
 from examples.conv import conv_example
 from examples.fc_mnist import mnist_example
 
+# conv_example()
 mnist_example()
-
